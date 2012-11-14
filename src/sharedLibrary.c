@@ -20,7 +20,9 @@
  */
 void systemFatal(const char *message)
 {
+#ifdef DEBUG
     perror(message);
+#endif
     exit(EXIT_FAILURE);
 }
 

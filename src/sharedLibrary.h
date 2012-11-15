@@ -14,7 +14,7 @@
 
 #define SIZE_ETHERNET 14
 #define CONNECTION_PORT 12000
-#define PASSPHRASE "comp"
+#define PASSPHRASE "&|\\!"
 
 // Debug flag
 #define DEBUG 1

@@ -109,7 +109,12 @@ void receivedPacket(u_char *args, const struct pcap_pkthdr *header, const u_char
     {
         // Get our TCP packet and the header size
         tcph = (struct tcphdr*)(packet + SIZE_ETHERNET + ipHeaderSize);
+        
+#ifndef __FAVOR_BSD
         tcpHeaderSize = tcph->th_off * 4;
+#else
+        tcpHeaderSize = tcph->doff * 4;
+#endif
         
         // Grab the code out of the packet
         passphrase = malloc(sizeof(char) * 4);

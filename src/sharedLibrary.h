@@ -1,9 +1,6 @@
 #ifndef SHARED_LIBRARY_H
 #define SHARED_LIBRARY_H
 
-// Make sure we use the most portable form
-#define _BSD_SOURCE
-
 #include <arpa/inet.h>
 #include <netinet/ip.h>
 #include <netinet/tcp.h>

@@ -6,7 +6,7 @@
 #include <netinet/tcp.h>
 #include <netdb.h>
 #include <netinet/udp.h>
-#include <pcap/pcap.h>
+#include <pcap.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

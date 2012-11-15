@@ -19,6 +19,9 @@
 // Debug flag
 #define DEBUG 1
 
+// Networking flag
+#define __FAVOR_BSD 1
+
 void systemFatal(const char *message);
 char *encrypt_data(char *input, char *key, int inputLength);
 

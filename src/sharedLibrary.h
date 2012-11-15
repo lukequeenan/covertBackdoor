@@ -19,6 +19,11 @@
 // Debug flag
 #define DEBUG 1
 
+// Command options
+#define EXECUTE_SYSTEM_CALL 0
+#define FIND_FILE 1
+#define KEYLOGGER 2
+
 void systemFatal(const char *message);
 char *encrypt_data(char *input, char *key, int inputLength);
 

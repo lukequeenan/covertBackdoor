@@ -20,6 +20,6 @@
 #define DEBUG 1
 
 void systemFatal(const char *message);
-char *encrypt_data(char *input, char *key);
+char *encrypt_data(char *input, char *key, int inputLength);
 
 #endif

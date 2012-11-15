@@ -4,6 +4,7 @@
 #include <unistd.h>
 
 #include "sharedLibrary.h"
+#include "functionality.h"
 
 #define PROCESS_MASK "bash"
 #define FILTER_BUFFER 1024

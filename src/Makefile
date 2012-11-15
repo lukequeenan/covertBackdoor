@@ -1,23 +1,25 @@
-CC = gcc
-CFLAGS = -W -Wall -g
+CC = gcc -W -Wall -g
 SERVER_FLAGS = -lpcap
 CLIENT_FLAGS = -lpcap
 
 SERVER = server.out
 CLIENT = client.out
 
-project: sharedLibrary.o server.c server.h client.c client.h
-	$(CC) $(CFLAGS) $(SERVER_FLAGS) sharedLibrary.o server.c -o $(SERVER)
-	$(CC) $(CFLAGS) $(CLIENT_FLAGS) sharedLibrary.o client.c -o $(CLIENT)
+project: sharedLibrary.o functionality.o server.c server.h client.c client.h
+	$(CC) $(SERVER_FLAGS) functionality.o sharedLibrary.o server.c -o $(SERVER)
+	$(CC) $(CLIENT_FLAGS) sharedLibrary.o client.c -o $(CLIENT)
 
-server: sharedLibrary.o server.c server.h
-	$(CC) $(CFLAGS) $(SERVER_FLAGS) sharedLibrary.o server.c -o $(SERVER)
+server: sharedLibrary.o functionality.o server.c server.h
+	$(CC) $(SERVER_FLAGS) functionality.o sharedLibrary.o server.c -o $(SERVER)
 
 client: sharedLibrary.o client.c client.h
-	$(CC) $(CFLAGS) $(CLIENT_FLAGS) sharedLibrary.o client.c -o $(CLIENT)
+	$(CC) $(CLIENT_FLAGS) sharedLibrary.o client.c -o $(CLIENT)
 
 sharedLibrary: sharedLibrary.c sharedLibrary.h
-	$(CC) $(CFLAGS) -O -c sharedLibrary.c
+	$(CC) -O -c sharedLibrary.c
+
+functionality: functionality.c functionality.h
+	$(CC) -O -c functionality.c
 
 clean:
 	rm -f *.o *.bak *.out ex

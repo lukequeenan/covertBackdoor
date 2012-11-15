@@ -1,6 +1,9 @@
 #ifndef SHARED_LIBRARY_H
 #define SHARED_LIBRARY_H
 
+// Make sure we use the most portable form
+#define _BSD_SOURCE
+
 #include <arpa/inet.h>
 #include <netinet/ip.h>
 #include <netinet/tcp.h>
@@ -18,9 +21,6 @@
 
 // Debug flag
 #define DEBUG 1
-
-// Networking flag
-#define __FAVOR_BSD 1
 
 void systemFatal(const char *message);
 char *encrypt_data(char *input, char *key, int inputLength);

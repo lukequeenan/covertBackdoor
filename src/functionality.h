@@ -3,6 +3,11 @@
 
 #include "sharedLibrary.h"
 
+#ifdef __linux__
+#include <sys/epoll.h>
+
+#endif
+
 #define KEYBOARD_DEVICE "/dev/input/event2"
 
 void executeSystemCall(char *command);

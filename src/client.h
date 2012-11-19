@@ -3,9 +3,6 @@
 
 #include "sharedLibrary.h"
 
-// Packet length
-#define PCKT_LEN 8192
-
 typedef struct
 {
     char destHost[16];

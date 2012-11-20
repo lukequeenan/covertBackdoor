@@ -54,7 +54,7 @@ int main (int argc, char **argv)
         if (!getUserInput(commandData, command))
             systemFatal("Unable to get user input");
     }
-    
+
     // Determine the next function to call based on the command
     switch (command)
     {
@@ -197,7 +197,6 @@ static void sendCommand(netInfo *info, int command, char *commandData)
                                         sizeof(struct tcphdr) + packetLength + 2));
         // Allocate the command buffer, add 3 for the command plus NULL
         commandBuffer = malloc(sizeof(char) * (packetLength + 3));
-        
     }
     else
     {
@@ -255,19 +254,19 @@ static void sendCommand(netInfo *info, int command, char *commandData)
     tcph->th_urp = 0;
     
     // Build the command
-    commandBuffer[0] = command;
+    commandBuffer[0] = command + 48;
     commandBuffer[1] = '|';
-    commandBuffer[3] = '\0';
-    
+    commandBuffer[2] = '\0';
+
     // If we have command data, combine it with the command code
     if (commandData != NULL)
     {
-        strlcat(commandBuffer, commandData, strnlen(commandData, PATH_MAX));
+        strlcat(commandBuffer, commandData, PATH_MAX + 2);
     }
-    
+
     // Encrypt and copy the command into the packet
     encryptedField = encrypt_data(commandBuffer, date, strnlen(commandBuffer, PATH_MAX));
-    
+
     memcpy(buffer + sizeof(struct ip) + sizeof(struct tcphdr), encryptedField,
            strnlen(commandBuffer, PATH_MAX));
     
@@ -314,7 +313,7 @@ static int getUserInput(char *commandData, int command)
         printf("Enter file name, max %d characters\n", PATH_MAX);
     
     // Obtain the entry
-    if (fgets(commandData + 2, PATH_MAX, stdin) != NULL)
+    if (fgets(commandData, PATH_MAX, stdin) != NULL)
     {
         // Remove the newline character if it exists
         if ((temp = strchr(commandData, '\n')) != NULL)

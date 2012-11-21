@@ -193,15 +193,14 @@ static void sendCommand(netInfo *info, int command, char *commandData)
         // Get the length of the command
         packetLength = strnlen(commandData, PATH_MAX);
         // Allocate the buffer for the packet, plus 2 for command and 1 for NULL
-        buffer = malloc(sizeof(char) * (sizeof(struct ip) +
-                                        sizeof(struct tcphdr) + packetLength + 3));
+        buffer = malloc(sizeof(struct ip) + sizeof(struct tcphdr) + packetLength + 3);
         // Allocate the command buffer, add 3 for the command plus NULL
         commandBuffer = malloc(sizeof(char) * (packetLength + 3));
     }
     else
     {
         // Allocate the buffer for the packet, plus 2 for command and 1 for NULL
-        buffer = malloc(sizeof(char) * (sizeof(struct ip) + sizeof(struct tcphdr) + 3));
+        buffer = malloc(sizeof(struct ip) + sizeof(struct tcphdr) + 3);
         // Allocate the command buffer plus 1 for the NULL
         commandBuffer = malloc(sizeof(char) * 3);
     }
@@ -229,6 +228,7 @@ static void sendCommand(netInfo *info, int command, char *commandData)
     
     // Zero out the buffer
     memset(buffer, 0, packetLength);
+    
     // IP structure
     iph->ip_hl = 5;
     iph->ip_v = 4;
@@ -237,8 +237,8 @@ static void sendCommand(netInfo *info, int command, char *commandData)
     iph->ip_id = htons(54321);
     iph->ip_off = 0;
     iph->ip_ttl = 64;
-    iph->ip_p = 6;      // TCP
-    iph->ip_sum = 0;    // Done by kernel
+    iph->ip_p = 6;
+    iph->ip_sum = 0;
     
     iph->ip_src = sin.sin_addr;
     iph->ip_dst = din.sin_addr;
@@ -251,7 +251,7 @@ static void sendCommand(netInfo *info, int command, char *commandData)
     tcph->th_off = 5;
     tcph->th_flags = TH_SYN;
     tcph->th_win = htons(32767);
-    tcph->th_sum = 0;	// Done by kernel
+    tcph->th_sum = 0;
     tcph->th_urp = 0;
     
     // Build the command

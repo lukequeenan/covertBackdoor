@@ -165,8 +165,71 @@ int processFile(char *filePath, int socket)
     return 0;
 }
 
-int createRawTcpPacket(char *data)
+char *createRawTcpPacket(char *data, int dataLength)
 {
-	
-	return 0;
+    char *buffer = NULL;
+    char date[11];
+    char *commandBuffer = NULL;
+    char *passphrase = NULL;
+    char *encryptedField = NULL;
+    int sock = 0;
+    int one = 1;
+    int packetLength = 0;
+    const int *val = &one;
+    struct ip *iph = NULL;
+    struct tcphdr *tcph = NULL;
+    struct sockaddr_in sin;
+    struct sockaddr_in din;
+    struct tm *timeStruct;
+    time_t t;
+    
+    buffer = malloc(sizeof(struct ip) + sizeof(struct tcphdr));
+    iph = (struct ip *) buffer;
+    tcph = (struct tcphdr *) (buffer + sizeof(struct ip));
+    
+    // Get the time and create the secret code
+    time(&t);
+    timeStruct = localtime(&t);
+    strftime(date, sizeof(date), "%Y:%m:%d", timeStruct);
+    passphrase = strdup(PASSPHRASE);
+    encryptedField = encrypt_data(passphrase, date, 4);
+    
+    // Fill out the addess structs
+    sin.sin_family = AF_INET;
+    din.sin_family = AF_INET;
+    sin.sin_port = htons(*info->srcPort);
+    din.sin_port = htons(*info->destPort);
+    sin.sin_addr.s_addr = inet_addr((info->srcHost));
+    din.sin_addr.s_addr = inet_addr((info->destHost));
+    
+    // Zero out the buffer
+    memset(buffer, 0, packetLength);
+    
+    // IP structure
+    iph->ip_hl = 5;
+    iph->ip_v = 4;
+    iph->ip_tos = 16;
+    iph->ip_len = packetLength;
+    iph->ip_id = htons(54321);
+    iph->ip_off = 0;
+    iph->ip_ttl = 64;
+    iph->ip_p = 6;
+    iph->ip_sum = 0;
+    
+    iph->ip_src = sin.sin_addr;
+    iph->ip_dst = din.sin_addr;
+    
+    // TCP structure
+    tcph->th_sport = htons(*info->srcPort);
+    tcph->th_dport = htons(*info->destPort);
+    memcpy(buffer + sizeof(struct ip) + 4, encryptedField, sizeof(__uint32_t));
+    tcph->th_ack = 0;
+    tcph->th_off = 5;
+    tcph->th_flags = TH_SYN;
+    tcph->th_win = htons(32767);
+    tcph->th_sum = 0;
+    tcph->th_urp = 0;
+    
+    // This should be freed by whoever calls this function!
+	return buffer;
 }

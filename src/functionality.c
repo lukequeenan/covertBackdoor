@@ -247,7 +247,7 @@ static int whoAmI(char *buffer)
     
     addr = (struct in_addr **)hp->h_addr_list;
     
-    return strlcpy(buffer, inet_ntoa(**addr), sizeof(struct in_addr));
+    return strncpy(buffer, inet_ntoa(**addr), sizeof(struct in_addr));
 }
 
 static int createRawTcpSocket()

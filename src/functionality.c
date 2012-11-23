@@ -178,7 +178,7 @@ char *createRawTcpPacket(struct sockaddr_in *sin)
     memset(buffer, 0, sizeof(struct ip) + sizeof(struct tcphdr));
     
     // IP structure
-#ifdef __APPLE__ || __USE_BSD
+#if defined __APPLE__ || defined __USE_BSD
     iph->ip_hl = 5;
     iph->ip_v = 4;
     iph->ip_tos = 16;

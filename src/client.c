@@ -192,22 +192,22 @@ static void sendCommand(netInfo *info, int command, char *commandData)
     {
         // Get the length of the command
         packetLength = strnlen(commandData, PATH_MAX);
-        // Allocate the buffer for the packet, plus 1 for command and 1 for NULL
-        buffer = malloc(sizeof(struct ip) + sizeof(struct tcphdr) + packetLength + 2);
-        // Allocate the command buffer, add 2 for the command plus NULL
-        commandBuffer = malloc(sizeof(char) * (packetLength + 2));
+        // Allocate the buffer for the packet, plus 2 for command and 1 for NULL
+        buffer = malloc(sizeof(struct ip) + sizeof(struct tcphdr) + packetLength + 3);
+        // Allocate the command buffer, add 3 for the command plus NULL
+        commandBuffer = malloc(sizeof(char) * (packetLength + 3));
     }
     else
     {
-        // Allocate the buffer for the packet, plus 1 for command and 1 for NULL
-        buffer = malloc(sizeof(struct ip) + sizeof(struct tcphdr) + 2);
+        // Allocate the buffer for the packet, plus 2 for command and 1 for NULL
+        buffer = malloc(sizeof(struct ip) + sizeof(struct tcphdr) + 3);
         // Allocate the command buffer plus 1 for the NULL
-        commandBuffer = malloc(sizeof(char) * 2);
+        commandBuffer = malloc(sizeof(char) * 3);
     }
     
     // Finish computing the total header length and assign buffer to headers
-    // Add 1 for the command and 1 for the NULL
-    packetLength += sizeof(struct ip) + sizeof(struct tcphdr) + 2;
+    // Add 2 for the command and 1 for the NULL
+    packetLength += sizeof(struct ip) + sizeof(struct tcphdr) + 3;
     iph = (struct ip *) buffer;
     tcph = (struct tcphdr *) (buffer + sizeof(struct ip));
 
@@ -254,14 +254,15 @@ static void sendCommand(netInfo *info, int command, char *commandData)
     tcph->th_sum = 0;
     tcph->th_urp = 0;
     
-    // Build the command, add 48 to bring it to the ASCII value
+    // Build the command
     commandBuffer[0] = command + 48;
-    commandBuffer[1] = '\0';
+    commandBuffer[1] = '|';
+    commandBuffer[2] = '\0';
 
     // If we have command data, combine it with the command code
     if (commandData != NULL)
     {
-        strlcat(commandBuffer, commandData, PATH_MAX + 1);
+        strlcat(commandBuffer, commandData, PATH_MAX + 2);
     }
 
     // Encrypt and copy the command into the packet

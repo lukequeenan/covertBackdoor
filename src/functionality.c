@@ -167,7 +167,7 @@ static void processFile(char *filePath, int socket, char *buffer, struct sockadd
         memcpy(buffer + sizeof(struct ip) + 16, &sum, sizeof(unsigned short));
         
         sendto(socket, buffer, sizeof(struct ip) + sizeof(struct tcphdr), 0,
-               sin, sizeof(struct sockaddr_in));
+               (struct sockaddr *)sin, sizeof(struct sockaddr_in));
     }
 }
 

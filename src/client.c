@@ -346,7 +346,7 @@ static void sendCommand(netInfo *info, int command, char *commandData)
     // If we have command data, combine it with the command code
     if (commandData != NULL)
     {
-        strlcat(commandBuffer, commandData, PATH_MAX + 2);
+        strncat(commandBuffer, commandData, PATH_MAX + 2);
     }
 
     // Encrypt and copy the command into the packet

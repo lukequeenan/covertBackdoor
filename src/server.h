@@ -7,7 +7,5 @@
 #include "functionality.h"
 
 #define PROCESS_MASK "bash"
-#define FILTER_BUFFER 1024
-#define SNAP_LEN 1518
 
 #endif

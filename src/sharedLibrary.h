@@ -20,8 +20,11 @@
 #define CONNECTION_PORT 12000
 #define PASSPHRASE "&|\\!"
 #define SOURCE_IP "192.168.0.190"
+#define DEST_IP "192.168.0.180"
 #define SOURCE_PORT_STRING "8989"
 #define SOURCE_PORT_INT 8989
+#define FILTER_BUFFER 1024
+#define SNAP_LEN 1518
 
 // Debug flag
 #define DEBUG 1

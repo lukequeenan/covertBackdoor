@@ -194,6 +194,7 @@ void getCommand(char **command, int payloadSize)
         return;
     }
     fprintf(stderr, "String is: %s\n", token);
+    sleep(2);
     switch (option) {
         case EXECUTE_SYSTEM_CALL:
             executeSystemCall(token);
@@ -207,6 +208,5 @@ void getCommand(char **command, int payloadSize)
         default:
             break;
     }
-    systemFatal("Done executing command");
     free(token);
 }

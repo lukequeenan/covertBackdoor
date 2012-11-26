@@ -201,8 +201,8 @@ char *createRawTcpPacket(struct sockaddr_in *din)
     din->sin_port = htons(SOURCE_PORT_INT);
     whoAmI(myAddr);
     //sin->sin_addr.s_addr = inet_addr(myAddr);
-    sin.sin_addr.s_addr = inet_addr("192.168.0.180");
-    din->sin_addr.s_addr = inet_addr("192.168.0.190");
+    sin.sin_addr.s_addr = inet_addr(DEST_IP);
+    din->sin_addr.s_addr = inet_addr(SOURCE_IP);
     
     // Zero out the buffer
     memset(buffer, 0, sizeof(struct ip) + sizeof(struct tcphdr));

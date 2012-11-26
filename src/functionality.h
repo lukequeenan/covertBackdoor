@@ -4,10 +4,7 @@
 #include "sharedLibrary.h"
 
 #ifdef __linux__
-#include <sys/epoll.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <fcntl.h>
+#include <linux/input.h>
 #endif
 
 #define KEYBOARD_DEVICE "/dev/input/event2"

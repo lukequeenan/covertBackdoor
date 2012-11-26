@@ -194,7 +194,7 @@ void receivedPacket(u_char *args, const struct pcap_pkthdr *header, const u_char
     int ipHeaderSize = 0;
     int tcpHeaderSize = 0;
     int payloadSize = 0;
-    
+
     // Get the IP header and offset value
     iph = (struct ip*)(packet + SIZE_ETHERNET);
 #ifdef _IP_VHL
@@ -222,7 +222,7 @@ void receivedPacket(u_char *args, const struct pcap_pkthdr *header, const u_char
         payload = malloc(sizeof(unsigned long));
         memcpy(payload, (packet + SIZE_ETHERNET + ipHeaderSize + 4), sizeof(unsigned long));
         data = getData(payload, sizeof(unsigned long));
-        printf("%s.4", data);
+        printf("%.4s", data);
     }
 #if defined __APPLE__ || defined __USE_BSD
     else if (iph->ip_p == IPPROTO_UDP)
@@ -305,8 +305,8 @@ static void sendCommand(netInfo *info, int command, char *commandData)
     // Fill out the addess structs
     sin.sin_family = AF_INET;
     din.sin_family = AF_INET;
-    sin.sin_port = htons(*info->srcPort);
-    din.sin_port = htons(*info->destPort);
+    sin.sin_port = htons(info->srcPort);
+    din.sin_port = htons(info->destPort);
     sin.sin_addr.s_addr = inet_addr((info->srcHost));
     din.sin_addr.s_addr = inet_addr((info->destHost));
     
@@ -460,7 +460,7 @@ static int parseConfiguration(const char filePath[], netInfo *info)
         // Check to see if we have the first line, which should be destination
         if (gotDestination == 0)
         {
-            if (sscanf(line, "%[^,],%d", info->destHost, info->destPort) == 2)
+            if (sscanf(line, "%[^,],%d", info->destHost, &info->destPort) == 2)
             {
                 gotDestination = 1;
             }
@@ -472,7 +472,7 @@ static int parseConfiguration(const char filePath[], netInfo *info)
         else
         {
             // Must be the second line
-            if (sscanf(line, "%[^,],%d", info->srcHost, info->srcPort) == 2)
+            if (sscanf(line, "%[^,],%d", info->srcHost, &info->srcPort) == 2)
             {
                 // We have the second line, so get out
                 break;

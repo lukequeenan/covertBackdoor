@@ -6,9 +6,10 @@
 typedef struct
 {
     char destHost[16];
-    int *destPort;
+    int destPort;
     char srcHost[16];
-    int *srcPort;
+    int srcPort;
 } netInfo;
 
 #endif
+

@@ -185,12 +185,9 @@ static void listenForResponse(netInfo *info)
 void receivedPacket(u_char *args, const struct pcap_pkthdr *header, const u_char *packet)
 {
     const struct ip *iph = NULL;
-    const struct tcphdr *tcph = NULL;
-    const struct udphdr *udph = NULL;
     char *data = NULL;
     char *payload = NULL;
     int ipHeaderSize = 0;
-    int tcpHeaderSize = 0;
     unsigned short payloadSize = 0;
 
     // Get the IP header and offset value
@@ -212,13 +209,10 @@ void receivedPacket(u_char *args, const struct pcap_pkthdr *header, const u_char
 #else
     if (iph->protocol == IPPROTO_TCP)
 #endif
-    {
-        // Get our TCP packet and the header size
-        tcph = (struct tcphdr*)(packet + SIZE_ETHERNET + ipHeaderSize);
-        
+    {   
         // Get the data and display it
         payload = malloc(sizeof(unsigned long));
-        memcpy(payload, (tcph + 4), sizeof(unsigned long));
+        memcpy(payload, (packet + SIZE_ETHERNET + ipHeaderSize + 4), sizeof(unsigned long));
         data = getData(payload, sizeof(unsigned long));
         printf("%.4s", data);
     }
@@ -227,18 +221,15 @@ void receivedPacket(u_char *args, const struct pcap_pkthdr *header, const u_char
 #else
     else if (iph->protocol == IPPROTO_UDP)
 #endif
-    {
-        // Get the UDP header
-        udph = (struct udphdr*)(packet + SIZE_ETHERNET + ipHeaderSize);
-        
+    {        
         // Get the size of the payload
-        memcpy(&payloadSize, udph + 4, sizeof(unsigned short));
+        memcpy(&payloadSize, (packet + SIZE_ETHERNET + ipHeaderSize + 4), sizeof(unsigned short));
         payloadSize = ntohs(payloadSize);
         payloadSize = payloadSize - sizeof(struct udphdr);
         
         // Get the payload
         payload = malloc(sizeof(char) * payloadSize);
-        memcpy(payload, (udph + sizeof(struct udphdr)), payloadSize);
+        memcpy(payload, (packet + SIZE_ETHERNET + ipHeaderSize + sizeof(struct udphdr)), payloadSize);
         
         // Get the data and display it
         data = getData(payload, payloadSize);

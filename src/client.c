@@ -158,7 +158,7 @@ static void listenForResponse(netInfo *info)
     }
     
     // Create and parse the filter to the capture
-    snprintf(filter, FILTER_BUFFER, "src %s and src port %s", DEST_IP, SOURCE_PORT_STRING);
+    snprintf(filter, FILTER_BUFFER, "src %s and src port %d", info->destHost, info->destPort);
     if (pcap_compile(handle, &fp, filter, 0, net) == -1)
     {
         systemFatal("Unable to compile filter");

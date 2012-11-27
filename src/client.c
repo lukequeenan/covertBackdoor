@@ -346,8 +346,8 @@ static void sendCommand(netInfo *info, int command, char *commandData)
     
     // TCP structure
 #if defined __APPLE__ || defined __FAVOR_BSD
-    tcph->th_sport = htons(*info->srcPort);
-    tcph->th_dport = htons(*info->destPort);
+    tcph->th_sport = htons(info->srcPort);
+    tcph->th_dport = htons(info->destPort);
     memcpy(buffer + sizeof(struct ip) + 4, encryptedField, sizeof(__uint32_t));
     tcph->th_ack = 0;
     tcph->th_off = 5;
